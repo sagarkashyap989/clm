@@ -1,16 +1,22 @@
 {
   "name": "contract-management-system",
   "private": true,
-  "packageManager": "pnpm@9.15.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
-    "start": "turbo run start"
+    "dev": "npm run dev --workspace=@cml/web",
+    "build": "npm run build --workspace=@cml/web",
+    "lint": "npm run lint --workspace=@cml/web",
+    "test": "npm run test --workspace=@cml/web"
   },
   "devDependencies": {
+    "@types/diff": "^8.0.0",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "diff": "^9.0.0"
   }
 }

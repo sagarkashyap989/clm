@@ -8,6 +8,8 @@ import { RegisterPage } from '@/features/auth/RegisterPage';
 import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
 import { VerifyEmailPage } from '@/features/auth/VerifyEmailPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
+import { ContractsPage } from '@/features/contracts/ContractsPage';
+import { ContractDetailPage } from '@/features/contracts/ContractDetailPage';
 import { LandingPage } from '@/features/landing/LandingPage';
 import { ProfilePage } from '@/features/profile/ProfilePage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
@@ -28,6 +30,8 @@ export function AppRouter() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/contracts" element={<ContractsPage />} />
+            <Route path="/contracts/:contractId" element={<ContractDetailPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
           </Route>

@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth';
+import { NotificationDropdown } from '@/features/collaboration/NotificationDropdown';
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `rounded-md px-3 py-2 text-sm font-medium transition ${
@@ -11,15 +12,40 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto flex min-h-screen max-w-6xl gap-6 px-4 py-6 md:px-6">
+      {/* Mobile Top Navigation */}
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-ink-100 bg-white/95 px-4 py-3 backdrop-blur md:hidden">
+        <div className="flex items-center gap-2">
+          <span className="font-serif text-lg font-bold text-ink-950">CML</span>
+          <span className="text-xs text-ink-500">{currentOrg?.name}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <NotificationDropdown />
+          <div className="flex items-center gap-1 overflow-x-auto text-xs">
+            <NavLink to="/dashboard" className={linkClass}>
+              Dashboard
+            </NavLink>
+            <NavLink to="/contracts" className={linkClass}>
+              Contracts
+            </NavLink>
+            <NavLink to="/settings" className={linkClass}>
+              Org
+            </NavLink>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto flex min-h-screen max-w-7xl gap-6 px-4 py-6 md:px-6">
         <aside className="hidden w-60 shrink-0 rounded-2xl border border-ink-100 bg-white/80 p-4 shadow-sm md:block">
           <div className="mb-8">
-            <p className="font-display text-2xl font-semibold text-ink-950">CML</p>
-            <p className="mt-1 text-sm text-ink-500">Contract workspace</p>
+            <p className="font-serif text-2xl font-bold tracking-tight text-ink-950">CML</p>
+            <p className="mt-0.5 text-xs text-ink-500">Contract Lifecycle Platform</p>
           </div>
           <nav className="flex flex-col gap-1">
             <NavLink to="/dashboard" className={linkClass}>
               Dashboard
+            </NavLink>
+            <NavLink to="/contracts" className={linkClass}>
+              Contracts
             </NavLink>
             <NavLink to="/settings" className={linkClass}>
               Organization
@@ -28,22 +54,36 @@ export function AppShell() {
               Profile
             </NavLink>
           </nav>
-          <div className="mt-10 border-t border-ink-100 pt-4 text-sm">
-            <p className="font-medium text-ink-900">{currentOrg?.name ?? 'No organization'}</p>
+          <div className="mt-10 border-t border-ink-100 pt-4 text-xs">
+            <p className="font-bold text-ink-900">{currentOrg?.name ?? 'No organization'}</p>
             <p className="text-ink-500">{user?.name}</p>
             <p className="capitalize text-ink-500">{currentRole ?? '—'}</p>
             <button
               type="button"
               onClick={() => void logout()}
-              className="mt-4 text-sm font-medium text-accent hover:underline"
+              className="mt-4 text-xs font-semibold text-accent hover:underline"
             >
               Log out
             </button>
           </div>
         </aside>
-        <main className="flex-1 rounded-2xl border border-ink-100 bg-white/90 p-5 shadow-sm md:p-8">
-          <Outlet />
-        </main>
+
+        <div className="flex flex-1 flex-col gap-4">
+          {/* Top Bar with Search & Notifications */}
+          <div className="hidden md:flex items-center justify-between rounded-2xl border border-ink-100 bg-white px-6 py-3 shadow-2xs">
+            <div className="text-xs text-ink-500">
+              Workspace: <strong className="text-ink-800">{currentOrg?.name}</strong> • Logged in as <strong className="text-ink-800">{user?.name}</strong>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <NotificationDropdown />
+            </div>
+          </div>
+
+          <main className="flex-1 rounded-2xl border border-ink-100 bg-white/95 p-5 shadow-sm md:p-8">
+            <Outlet />
+          </main>
+        </div>
       </div>
     </div>
   );

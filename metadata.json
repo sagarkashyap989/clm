@@ -1,0 +1,6 @@
+{
+  "name": "Contract Management System",
+  "description": "Production-ready contract lifecycle management platform with in-browser legal clause editor, PDF viewer, version history timeline, and redline comparison diffs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

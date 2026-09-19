@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { config } from './config/index.js';
 import { errorHandler } from './middlewares/error.js';
 import { authRouter } from './routes/auth.routes.js';
+import { contractRouter } from './routes/contract.routes.js';
 import { organizationRouter } from './routes/organization.routes.js';
 
 export function createApp() {
@@ -26,6 +27,7 @@ export function createApp() {
 
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/organizations', organizationRouter);
+  app.use('/api/v1/contracts', contractRouter);
 
   app.use(errorHandler);
   return app;
