@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
@@ -1128,22 +1128,34 @@ function mockApiPlugin(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), mockApiPlugin()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, 'src'),
-      '@cml/shared': path.resolve(__dirname, '../../packages/shared/src/index.ts'),
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, __dirname, '');
+  const useMock = env.VITE_USE_MOCK !== 'false';
+  const apiTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:5000';
+
+  return {
+    plugins: [react(), ...(useMock ? [mockApiPlugin()] : [])],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, 'src'),
+        '@cml/shared': path.resolve(__dirname, '../../packages/shared/src/index.ts'),
+      },
     },
-  },
-  server: {
-    host: '0.0.0.0',
-    port: 3000,
-    allowedHosts: true,
-  },
-  build: {
-    outDir: path.resolve(__dirname, '../../dist'),
-    emptyOutDir: true,
-  },
+    server: {
+      host: '0.0.0.0',
+      port: 3000,
+      allowedHosts: true,
+      proxy: useMock
+        ? undefined
+        : {
+            '/api': { target: apiTarget, changeOrigin: true },
+            '/health': { target: apiTarget, changeOrigin: true },
+          },
+    },
+    build: {
+      outDir: path.resolve(__dirname, '../../dist'),
+      emptyOutDir: true,
+    },
+  };
 });
 

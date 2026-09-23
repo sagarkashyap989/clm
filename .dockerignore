@@ -1,12 +1,14 @@
 node_modules
+.git
+.turbo
 dist
 build
+coverage
 .env
 .env.local
 .env.production
 *.log
 .DS_Store
-coverage
-.turbo
-*.tsbuildinfo
 .vite
+**/*.tsbuildinfo
+apps/web/.env.local

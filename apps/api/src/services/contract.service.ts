@@ -1,6 +1,8 @@
-import type { Types } from 'mongoose';
+import { MembershipStatus } from '@cml/shared';
+import mongoose, { type Types } from 'mongoose';
 import { Contract } from '../models/Contract.js';
 import { DocumentVersion } from '../models/DocumentVersion.js';
+import { Membership } from '../models/Membership.js';
 import { writeAuditLog } from '../repositories/audit.repository.js';
 import { AppError } from '../utils/errors.js';
 import type {
@@ -84,6 +86,33 @@ export async function listContracts(
       totalPages: Math.ceil(total / limit) || 1,
     },
   };
+}
+
+export async function resolveAccessibleOrganization(
+  contractId: string,
+  userId: string,
+): Promise<string> {
+  if (!mongoose.isValidObjectId(contractId)) {
+    throw new AppError(404, 'CONTRACT_NOT_FOUND', 'Contract not found');
+  }
+
+  const contract = await Contract.findOne({ _id: contractId, deletedAt: null }).lean();
+  if (!contract) {
+    throw new AppError(404, 'CONTRACT_NOT_FOUND', 'Contract not found');
+  }
+
+  const contractOrgId = contract.organizationId.toString();
+  const membership = await Membership.findOne({
+    userId,
+    organizationId: contractOrgId,
+    status: MembershipStatus.ACTIVE,
+  });
+
+  if (!membership) {
+    throw new AppError(404, 'CONTRACT_NOT_FOUND', 'Contract not found');
+  }
+
+  return contractOrgId;
 }
 
 export async function getContract(

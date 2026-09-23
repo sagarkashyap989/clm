@@ -1,6 +1,28 @@
 import { create } from 'zustand';
 import { api } from '@/lib/api';
 
+const CURRENT_ORG_KEY = 'cml.currentOrgId';
+
+function readStoredOrgId(): string | null {
+  try {
+    return window.localStorage.getItem(CURRENT_ORG_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredOrgId(orgId: string | null) {
+  try {
+    if (orgId) {
+      window.localStorage.setItem(CURRENT_ORG_KEY, orgId);
+    } else {
+      window.localStorage.removeItem(CURRENT_ORG_KEY);
+    }
+  } catch {
+    // Ignore storage failures (private mode).
+  }
+}
+
 export type User = {
   id: string;
   email: string;
@@ -31,10 +53,24 @@ type AuthState = {
     role?: string | null;
     memberships?: Membership[];
   }) => void;
+  switchOrganization: (organizationId: string) => void;
   clearSession: () => void;
   bootstrap: () => Promise<void>;
   logout: () => Promise<void>;
 };
+
+function pickMembership(
+  memberships: Membership[],
+  preferred?: Organization | null,
+): Membership | undefined {
+  const storedOrgId = readStoredOrgId();
+  return (
+    memberships.find((m) => preferred && m.organization?.id === preferred.id) ??
+    memberships.find((m) => m.organization?.id === storedOrgId) ??
+    memberships.find((m) => m.organization) ??
+    undefined
+  );
+}
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -44,14 +80,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: true,
   setSession: ({ user, organization, role, memberships }) => {
     const nextMemberships = memberships ?? get().memberships;
-    const currentOrg =
-      organization ??
-      nextMemberships.find((m) => m.organization)?.organization ??
-      null;
-    const currentRole =
-      role ??
-      nextMemberships.find((m) => m.organization?.id === currentOrg?.id)?.role ??
-      null;
+    const selected = pickMembership(nextMemberships, organization);
+    const currentOrg = selected?.organization ?? organization ?? null;
+    const currentRole = role ?? selected?.role ?? null;
+    writeStoredOrgId(currentOrg?.id ?? null);
     set({
       user,
       memberships: nextMemberships,
@@ -60,14 +92,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       loading: false,
     });
   },
-  clearSession: () =>
+  switchOrganization: (organizationId) => {
+    const selected = get().memberships.find((m) => m.organization?.id === organizationId);
+    if (!selected?.organization) return;
+    writeStoredOrgId(selected.organization.id);
+    set({
+      currentOrg: selected.organization,
+      currentRole: selected.role,
+    });
+  },
+  clearSession: () => {
+    writeStoredOrgId(null);
     set({
       user: null,
       memberships: [],
       currentOrg: null,
       currentRole: null,
       loading: false,
-    }),
+    });
+  },
   bootstrap: async () => {
     try {
       const data = await api<{
@@ -77,8 +120,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       get().setSession({
         user: data.user,
         memberships: data.memberships,
-        organization: data.memberships[0]?.organization ?? null,
-        role: data.memberships[0]?.role ?? null,
       });
     } catch {
       get().clearSession();

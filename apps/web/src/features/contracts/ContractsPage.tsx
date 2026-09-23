@@ -9,6 +9,7 @@ import {
   type ContractStatus,
 } from '@cml/shared';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/stores/auth';
 import { UploadContractModal } from './UploadContractModal';
 
 export type ContractItem = {
@@ -57,6 +58,7 @@ export function getStatusBadgeClass(status: ContractStatus): string {
 
 export function ContractsPage() {
   const queryClient = useQueryClient();
+  const currentOrgId = useAuthStore((s) => s.currentOrg?.id);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -70,7 +72,8 @@ export function ContractsPage() {
   if (sortBy) queryParams.set('sort', sortBy);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['contracts', searchTerm, statusFilter, typeFilter, sortBy],
+    queryKey: ['contracts', currentOrgId, searchTerm, statusFilter, typeFilter, sortBy],
+    enabled: Boolean(currentOrgId),
     queryFn: () =>
       api<{ contracts: ContractItem[]; pagination: { total: number } }>(
         `/api/v1/contracts?${queryParams.toString()}`,

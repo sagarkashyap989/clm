@@ -31,13 +31,18 @@ export function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'recent' | 'pending' | 'shared'>('recent');
 
   const summaryQuery = useQuery({
-    queryKey: ['contract-summary'],
+    queryKey: ['contract-summary', currentOrg?.id],
+    enabled: Boolean(currentOrg?.id),
     queryFn: () => api<DashboardSummaryData>('/api/v1/contracts/dashboard-summary'),
   });
 
   const sharedQuery = useQuery({
-    queryKey: ['contracts-shared-with-me'],
-    queryFn: () => api<{ contracts: (ContractItem & { myPermission?: string; sharedAt?: string })[] }>('/api/v1/contracts/shared-with-me'),
+    queryKey: ['contracts-shared-with-me', currentOrg?.id],
+    enabled: Boolean(currentOrg?.id),
+    queryFn: () =>
+      api<{ contracts: (ContractItem & { myPermission?: string; sharedAt?: string })[] }>(
+        '/api/v1/contracts/shared-with-me',
+      ),
   });
 
   const membersQuery = useQuery({

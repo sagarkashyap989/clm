@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema } from '@cml/shared';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { z } from 'zod';
 import { AuthLayout, Field, buttonClass, inputClass } from '@/components/ui';
 import { api, ApiClientError } from '@/lib/api';
@@ -11,6 +11,8 @@ type FormValues = z.infer<typeof loginSchema>;
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const next = params.get('next');
   const setSession = useAuthStore((s) => s.setSession);
   const {
     register,
@@ -21,20 +23,19 @@ export function LoginPage() {
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      const data = await api<{
-        user: User;
-        organization: Organization | null;
-        role: string | null;
-      }>('/api/v1/auth/login', {
+      await api('/api/v1/auth/login', {
         method: 'POST',
         body: JSON.stringify(values),
       });
+      const me = await api<{
+        user: User;
+        memberships: { id: string; role: string; organization: Organization | null }[];
+      }>('/api/v1/auth/me');
       setSession({
-        user: data.user,
-        organization: data.organization,
-        role: data.role,
+        user: me.user,
+        memberships: me.memberships,
       });
-      navigate('/dashboard');
+      navigate(next && next.startsWith('/') ? next : '/dashboard');
     } catch (error) {
       const message =
         error instanceof ApiClientError ? error.message : 'Login failed';

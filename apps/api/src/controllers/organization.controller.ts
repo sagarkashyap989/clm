@@ -66,3 +66,13 @@ export const previewInvitation = asyncHandler(async (req: Request, res: Response
   const invitation = await organizationService.getInvitationPreview(token);
   res.json({ data: { invitation } });
 });
+
+export const listPendingInvitations = asyncHandler(async (req: Request, res: Response) => {
+  const invitations = await organizationService.listPendingInvitations(paramId(req.params.id));
+  res.json({ data: { invitations } });
+});
+
+export const acceptInvitation = asyncHandler(async (req: Request, res: Response) => {
+  const result = await organizationService.acceptInvitation(req.body.token, req.user!.id);
+  res.json({ data: result });
+});

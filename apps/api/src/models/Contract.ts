@@ -74,6 +74,10 @@ const contractSchema = new Schema(
       type: String,
       default: '',
     },
+    draftContent: {
+      type: String,
+      default: null,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',

@@ -13,6 +13,13 @@ type Member = {
   user: { id: string; name: string; email: string } | null;
 };
 
+type PendingInvite = {
+  id: string;
+  email: string;
+  role: string;
+  expiresAt: string;
+};
+
 type OrgForm = z.infer<typeof updateOrganizationSchema>;
 type InviteForm = z.infer<typeof inviteMemberSchema>;
 
@@ -26,6 +33,15 @@ export function SettingsPage() {
     enabled: Boolean(currentOrg?.id),
     queryFn: () =>
       api<{ members: Member[] }>(`/api/v1/organizations/${currentOrg!.id}/members`),
+  });
+
+  const invitesQuery = useQuery({
+    queryKey: ['invitations', currentOrg?.id],
+    enabled: Boolean(currentOrg?.id) && isAdmin,
+    queryFn: () =>
+      api<{ invitations: PendingInvite[] }>(
+        `/api/v1/organizations/${currentOrg!.id}/invitations`,
+      ),
   });
 
   const orgForm = useForm<OrgForm>({
@@ -69,6 +85,7 @@ export function SettingsPage() {
     onSuccess: () => {
       inviteForm.reset({ email: '', role: 'member' });
       void queryClient.invalidateQueries({ queryKey: ['members', currentOrg?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['invitations', currentOrg?.id] });
     },
   });
 
@@ -157,7 +174,10 @@ export function SettingsPage() {
             </button>
           </form>
           {inviteMember.isSuccess ? (
-            <p className="mt-2 text-sm text-accent">Invitation sent (check Mailhog).</p>
+            <p className="mt-2 text-sm text-accent">
+              Invitation sent. They must open the Mailhog link and accept it before they appear
+              as a member.
+            </p>
           ) : null}
           {inviteMember.error ? (
             <p className="mt-2 text-sm text-red-600">
@@ -166,6 +186,22 @@ export function SettingsPage() {
                 : 'Invite failed'}
             </p>
           ) : null}
+        </section>
+      ) : null}
+
+      {isAdmin && (invitesQuery.data?.invitations.length ?? 0) > 0 ? (
+        <section>
+          <h2 className="text-lg font-semibold">Pending invitations</h2>
+          <ul className="mt-3 divide-y divide-ink-100 rounded-xl border border-ink-100">
+            {invitesQuery.data?.invitations.map((invite) => (
+              <li key={invite.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="font-medium">{invite.email}</p>
+                  <p className="text-sm text-ink-500">{invite.role} · waiting to accept</p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 

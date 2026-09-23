@@ -3,7 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 dotenv.config();
 
 function required(name: string, fallback?: string): string {
@@ -30,6 +31,8 @@ export const config = {
     host: process.env.SMTP_HOST ?? 'localhost',
     port: Number(process.env.SMTP_PORT ?? 1025),
     from: process.env.SMTP_FROM ?? 'noreply@cml.local',
+    user: process.env.SMTP_USER || undefined,
+    pass: process.env.SMTP_PASS || undefined,
   },
   invitationExpiresDays: Number(process.env.INVITATION_EXPIRES_DAYS ?? 7),
 };

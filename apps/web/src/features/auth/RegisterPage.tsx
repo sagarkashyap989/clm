@@ -38,8 +38,13 @@ export function RegisterPage() {
         method: 'POST',
         body: JSON.stringify(values),
       });
+      const me = await api<{
+        user: User;
+        memberships: { id: string; role: string; organization: Organization | null }[];
+      }>('/api/v1/auth/me');
       setSession({
-        user: data.user,
+        user: me.user,
+        memberships: me.memberships,
         organization: data.organization,
         role: data.role,
       });
@@ -75,7 +80,12 @@ export function RegisterPage() {
             <input className={inputClass} {...register('organizationName')} />
           </Field>
         ) : (
-          <input type="hidden" {...register('inviteToken')} />
+          <>
+            <input type="hidden" {...register('inviteToken')} />
+            <p className="mb-4 text-sm text-ink-500">
+              Use the same email that received the invitation.
+            </p>
+          </>
         )}
         {errors.root?.message ? (
           <p className="mb-4 text-sm text-red-600">{errors.root.message}</p>

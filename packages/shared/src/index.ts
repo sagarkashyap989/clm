@@ -70,6 +70,10 @@ export const updateMemberSchema = z.object({
   role: z.enum(ORG_ROLES),
 });
 
+export const acceptInvitationSchema = z.object({
+  token: z.string().min(1),
+});
+
 export const ContractStatus = {
   DRAFT: 'draft',
   IN_REVIEW: 'in_review',

@@ -240,24 +240,23 @@ export async function removeMember(
   return { ok: true };
 }
 
-export async function getInvitationPreview(token: string) {
+async function findOpenInvitationByToken(token: string) {
   const invitations = await Invitation.find({
     acceptedAt: null,
     expiresAt: { $gt: new Date() },
   });
 
-  let matched = null;
   for (const invite of invitations) {
     if (await verifyTokenHash(token, invite.tokenHash)) {
-      matched = invite;
-      break;
+      return invite;
     }
   }
 
-  if (!matched) {
-    throw new AppError(400, 'INVALID_INVITE', 'Invitation is invalid or expired');
-  }
+  throw new AppError(400, 'INVALID_INVITE', 'Invitation is invalid or expired');
+}
 
+export async function getInvitationPreview(token: string) {
+  const matched = await findOpenInvitationByToken(token);
   const org = await Organization.findById(matched.organizationId);
   return {
     email: matched.email,
@@ -266,5 +265,83 @@ export async function getInvitationPreview(token: string) {
       ? { id: org._id.toString(), name: org.name }
       : null,
     expiresAt: matched.expiresAt,
+  };
+}
+
+export async function listPendingInvitations(organizationId: string) {
+  const invitations = await Invitation.find({
+    organizationId,
+    acceptedAt: null,
+    expiresAt: { $gt: new Date() },
+  }).sort({ createdAt: -1 });
+
+  return invitations.map((invite) => ({
+    id: invite._id.toString(),
+    email: invite.email,
+    role: invite.role,
+    expiresAt: invite.expiresAt,
+  }));
+}
+
+export async function acceptInvitation(token: string, userId: string) {
+  const matched = await findOpenInvitationByToken(token);
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError(401, 'UNAUTHORIZED', 'User not found');
+  }
+
+  if (user.email.toLowerCase() !== matched.email.toLowerCase()) {
+    throw new AppError(
+      403,
+      'INVITE_EMAIL_MISMATCH',
+      `This invitation was sent to ${matched.email}. Sign in with that email to accept it.`,
+    );
+  }
+
+  const organization = await Organization.findById(matched.organizationId);
+  if (!organization) {
+    throw new AppError(404, 'ORG_NOT_FOUND', 'Organization not found');
+  }
+
+  let membership = await Membership.findOne({
+    userId: user._id,
+    organizationId: organization._id,
+  });
+
+  if (membership && membership.status === MembershipStatus.ACTIVE) {
+    matched.acceptedAt = new Date();
+    await matched.save();
+  } else if (membership) {
+    membership.status = MembershipStatus.ACTIVE;
+    membership.role = matched.role as OrgRole;
+    await membership.save();
+    matched.acceptedAt = new Date();
+    await matched.save();
+  } else {
+    membership = await Membership.create({
+      userId: user._id,
+      organizationId: organization._id,
+      role: matched.role,
+      status: MembershipStatus.ACTIVE,
+    });
+    matched.acceptedAt = new Date();
+    await matched.save();
+  }
+
+  await writeAuditLog({
+    actorId: user._id,
+    organizationId: organization._id,
+    action: 'organization.invitation_accepted',
+    resourceType: 'invitation',
+    resourceId: matched._id.toString(),
+    metadata: { email: user.email, role: matched.role },
+  });
+
+  return {
+    organization: {
+      id: organization._id.toString(),
+      name: organization.name,
+    },
+    role: membership.role,
   };
 }

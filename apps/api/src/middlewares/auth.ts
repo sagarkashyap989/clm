@@ -1,7 +1,7 @@
 import type { OrgRole } from '@cml/shared';
 import { MembershipStatus } from '@cml/shared';
 import type { NextFunction, Request, Response } from 'express';
-import type { Types } from 'mongoose';
+import mongoose, { type Types } from 'mongoose';
 import { Membership } from '../models/Membership.js';
 import { User } from '../models/User.js';
 import { AppError } from '../utils/errors.js';
@@ -84,6 +84,43 @@ export const requireOrgMember = asyncHandler(
 
     if (!membership) {
       throw new AppError(403, 'FORBIDDEN', 'You are not a member of this organization');
+    }
+
+    req.membership = {
+      id: membership._id.toString(),
+      organizationId: (membership.organizationId as Types.ObjectId).toString(),
+      role: membership.role as OrgRole,
+      status: membership.status,
+    };
+    next();
+  },
+);
+
+export const requireActiveOrganization = asyncHandler(
+  async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) {
+      throw new AppError(401, 'UNAUTHORIZED', 'Authentication required');
+    }
+
+    const headerValue = req.headers['x-organization-id'];
+    const headerOrg = typeof headerValue === 'string' ? headerValue.trim() : '';
+    if (headerOrg && !mongoose.isValidObjectId(headerOrg)) {
+      throw new AppError(400, 'NO_ORGANIZATION', 'Active organization required');
+    }
+
+    const membership = headerOrg
+      ? await Membership.findOne({
+          userId: req.user.id,
+          organizationId: headerOrg,
+          status: MembershipStatus.ACTIVE,
+        })
+      : await Membership.findOne({
+          userId: req.user.id,
+          status: MembershipStatus.ACTIVE,
+        }).sort({ createdAt: 1 });
+
+    if (!membership) {
+      throw new AppError(400, 'NO_ORGANIZATION', 'Active organization required');
     }
 
     req.membership = {

@@ -6,6 +6,7 @@ import { config } from './config/index.js';
 import { errorHandler } from './middlewares/error.js';
 import { authRouter } from './routes/auth.routes.js';
 import { contractRouter } from './routes/contract.routes.js';
+import { notificationRouter } from './routes/notification.routes.js';
 import { organizationRouter } from './routes/organization.routes.js';
 
 export function createApp() {
@@ -28,6 +29,7 @@ export function createApp() {
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/organizations', organizationRouter);
   app.use('/api/v1/contracts', contractRouter);
+  app.use('/api/v1/notifications', notificationRouter);
 
   app.use(errorHandler);
   return app;

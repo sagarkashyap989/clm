@@ -8,7 +8,7 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
   }`;
 
 export function AppShell() {
-  const { user, currentOrg, currentRole, logout } = useAuthStore();
+  const { user, currentOrg, currentRole, memberships, switchOrganization, logout } = useAuthStore();
 
   return (
     <div className="min-h-screen">
@@ -16,7 +16,23 @@ export function AppShell() {
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-ink-100 bg-white/95 px-4 py-3 backdrop-blur md:hidden">
         <div className="flex items-center gap-2">
           <span className="font-serif text-lg font-bold text-ink-950">CML</span>
-          <span className="text-xs text-ink-500">{currentOrg?.name}</span>
+          {memberships.length > 1 ? (
+            <select
+              className="max-w-[140px] rounded-md border border-ink-100 bg-white px-1 py-0.5 text-xs text-ink-700"
+              value={currentOrg?.id ?? ''}
+              onChange={(event) => switchOrganization(event.target.value)}
+            >
+              {memberships.map((membership) =>
+                membership.organization ? (
+                  <option key={membership.id} value={membership.organization.id}>
+                    {membership.organization.name}
+                  </option>
+                ) : null,
+              )}
+            </select>
+          ) : (
+            <span className="text-xs text-ink-500">{currentOrg?.name}</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <NotificationDropdown />
@@ -55,8 +71,29 @@ export function AppShell() {
             </NavLink>
           </nav>
           <div className="mt-10 border-t border-ink-100 pt-4 text-xs">
-            <p className="font-bold text-ink-900">{currentOrg?.name ?? 'No organization'}</p>
-            <p className="text-ink-500">{user?.name}</p>
+            {memberships.length > 1 ? (
+              <label className="block">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                  Workspace
+                </span>
+                <select
+                  className="mt-1 w-full rounded-lg border border-ink-100 bg-white px-2 py-1.5 text-xs font-semibold text-ink-900"
+                  value={currentOrg?.id ?? ''}
+                  onChange={(event) => switchOrganization(event.target.value)}
+                >
+                  {memberships.map((membership) =>
+                    membership.organization ? (
+                      <option key={membership.id} value={membership.organization.id}>
+                        {membership.organization.name}
+                      </option>
+                    ) : null,
+                  )}
+                </select>
+              </label>
+            ) : (
+              <p className="font-bold text-ink-900">{currentOrg?.name ?? 'No organization'}</p>
+            )}
+            <p className="mt-2 text-ink-500">{user?.name}</p>
             <p className="capitalize text-ink-500">{currentRole ?? '—'}</p>
             <button
               type="button"
@@ -72,7 +109,26 @@ export function AppShell() {
           {/* Top Bar with Search & Notifications */}
           <div className="hidden md:flex items-center justify-between rounded-2xl border border-ink-100 bg-white px-6 py-3 shadow-2xs">
             <div className="text-xs text-ink-500">
-              Workspace: <strong className="text-ink-800">{currentOrg?.name}</strong> • Logged in as <strong className="text-ink-800">{user?.name}</strong>
+              Workspace:{' '}
+              {memberships.length > 1 ? (
+                <select
+                  className="ml-1 rounded-md border border-ink-100 bg-white px-2 py-1 text-xs font-semibold text-ink-800"
+                  value={currentOrg?.id ?? ''}
+                  onChange={(event) => switchOrganization(event.target.value)}
+                >
+                  {memberships.map((membership) =>
+                    membership.organization ? (
+                      <option key={membership.id} value={membership.organization.id}>
+                        {membership.organization.name}
+                      </option>
+                    ) : null,
+                  )}
+                </select>
+              ) : (
+                <strong className="text-ink-800">{currentOrg?.name}</strong>
+              )}{' '}
+              • Role: <span className="capitalize font-semibold text-ink-800">{currentRole}</span> • Logged
+              in as <strong className="text-ink-800">{user?.name}</strong>
             </div>
 
             <div className="flex items-center gap-3">

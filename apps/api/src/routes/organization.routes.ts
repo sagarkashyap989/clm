@@ -1,4 +1,5 @@
 import {
+  acceptInvitationSchema,
   inviteMemberSchema,
   OrgRole,
   updateMemberSchema,
@@ -18,6 +19,12 @@ organizationRouter.get(
 
 organizationRouter.use(requireAuth);
 
+organizationRouter.post(
+  '/invitations/accept',
+  validateBody(acceptInvitationSchema),
+  organizationController.acceptInvitation,
+);
+
 organizationRouter.get(
   '/:id',
   requireOrgMember,
@@ -36,6 +43,13 @@ organizationRouter.get(
   '/:id/members',
   requireOrgMember,
   organizationController.listMembers,
+);
+
+organizationRouter.get(
+  '/:id/invitations',
+  requireOrgMember,
+  requireRole(OrgRole.ADMIN),
+  organizationController.listPendingInvitations,
 );
 
 organizationRouter.post(
