@@ -15,6 +15,17 @@ import { AppError } from '../utils/errors.js';
 
 type LeanUser = { _id: Types.ObjectId; name: string; email: string };
 
+function asLeanUser(value: unknown): LeanUser | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const user = value as { _id?: Types.ObjectId; name?: unknown; email?: unknown };
+  if (!user._id || typeof user.name !== 'string' || typeof user.email !== 'string') {
+    return undefined;
+  }
+  return { _id: user._id, name: user.name, email: user.email };
+}
+
 function publicUser(user?: LeanUser | null) {
   if (!user) {
     return { id: '', name: 'Unknown', email: '' };
@@ -56,8 +67,8 @@ function serializeComment(comment: {
   resolvedAt?: Date | null;
   createdAt?: Date;
 }) {
-  const author = comment.authorId as LeanUser;
-  const resolvedBy = comment.resolvedById as LeanUser | null | undefined;
+  const author = asLeanUser(comment.authorId);
+  const resolvedBy = asLeanUser(comment.resolvedById);
   return {
     id: comment._id.toString(),
     contractId: comment.contractId.toString(),
@@ -68,7 +79,7 @@ function serializeComment(comment: {
     replies: (comment.replies ?? []).map((reply) => ({
       id: reply._id.toString(),
       content: reply.content,
-      author: publicUser(reply.authorId as LeanUser),
+      author: publicUser(asLeanUser(reply.authorId)),
       createdAt: reply.createdAt?.toISOString() ?? new Date().toISOString(),
     })),
     isResolved: comment.isResolved,
@@ -177,7 +188,7 @@ export async function replyToComment(
   return {
     id: last?._id.toString(),
     content: last?.content,
-    author: publicUser(last?.authorId as LeanUser),
+    author: publicUser(asLeanUser(last?.authorId)),
     createdAt: (last as { createdAt?: Date } | undefined)?.createdAt?.toISOString(),
   };
 }
@@ -239,7 +250,7 @@ export async function listChat(contractId: string, organizationId: string) {
     id: message._id.toString(),
     contractId: message.contractId.toString(),
     content: message.content,
-    sender: publicUser(message.senderId as LeanUser),
+    sender: publicUser(asLeanUser(message.senderId)),
     type: message.type,
     createdAt: message.createdAt?.toISOString() ?? new Date().toISOString(),
   }));
@@ -266,7 +277,7 @@ export async function createChatMessage(
     id: created!._id.toString(),
     contractId: created!.contractId.toString(),
     content: created!.content,
-    sender: publicUser(created!.senderId as LeanUser),
+    sender: publicUser(asLeanUser(created!.senderId)),
     type: created!.type,
     createdAt: created!.createdAt?.toISOString() ?? new Date().toISOString(),
   };
