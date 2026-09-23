@@ -70,9 +70,15 @@ export const updateMemberSchema = z.object({
   role: z.enum(ORG_ROLES),
 });
 
-export const acceptInvitationSchema = z.object({
-  token: z.string().min(1),
-});
+export const acceptInvitationSchema = z
+  .object({
+    invitationId: z.string().min(1).optional(),
+    token: z.string().min(1).optional(),
+  })
+  .refine((data) => Boolean(data.invitationId) || Boolean(data.token), {
+    message: 'invitationId or token is required',
+    path: ['invitationId'],
+  });
 
 export const ContractStatus = {
   DRAFT: 'draft',
@@ -348,13 +354,14 @@ export type ContractChatMessage = {
   createdAt: string;
 };
 
-export type NotificationType = 'share' | 'comment' | 'status' | 'version';
+export type NotificationType = 'share' | 'comment' | 'status' | 'version' | 'invite';
 
 export type NotificationItem = {
   id: string;
   userId: string;
   contractId?: string;
   contractName?: string;
+  invitationId?: string;
   title: string;
   message: string;
   type: NotificationType;

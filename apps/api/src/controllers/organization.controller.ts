@@ -73,6 +73,6 @@ export const listPendingInvitations = asyncHandler(async (req: Request, res: Res
 });
 
 export const acceptInvitation = asyncHandler(async (req: Request, res: Response) => {
-  const result = await organizationService.acceptInvitation(req.body.token, req.user!.id);
+  const result = await organizationService.acceptInvitation(req.user!.id, req.body);
   res.json({ data: result });
 });

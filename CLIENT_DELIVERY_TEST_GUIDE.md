@@ -175,20 +175,19 @@ Organization roles in this product: **`admin`**, **`manager`**, **`member`**.
 
 1. As admin: change org name → save → name updates in sidebar and header.
 2. As manager/member: confirm no rename form (or save is blocked).
-3. Invite Manager B and Member C (valid emails, both roles).
+3. Invite Manager B and Member C (**they must already have accounts**; both roles).
 4. Pending invitations list shows waiting invites.
-5. Invite an existing member email → error.
-6. Invalid email → validation error.
+5. Invite an email with no account → error.
+6. Invite an existing member email → error.
+7. Invalid email → validation error.
 
 ### 8.2 Accept invitation
 
-1. Mailhog invitation link → `/accept-invite?token=...`.
-2. Preview shows org name, invited email, role.
-3. **Logged out, new user:** create account via invite token (`/register?token=...`) — **no** organization name field; join the inviting org, not a new one.
-4. **Logged in as matching email:** Accept → dashboard of that org.
-5. **Logged in as a different email:** cannot accept; option to create/switch account.
-6. Missing/invalid token → error.
-7. After accept, invite disappears from pending list; member appears in Members.
+1. Sign in as the invited user (any of their orgs).
+2. Open the bell → invitation notification for Org A.
+3. Click **Accept invite** → dashboard switches to Org A with the invited role.
+4. After accept, invite disappears from pending list; member appears in Members.
+5. Inviting a user who is already a member still errors.
 
 ### 8.3 Role change and removal
 

@@ -53,18 +53,3 @@ export async function sendPasswordResetEmail(
     html: `<p>Hi ${name},</p><p><a href="${url}">Reset your password</a></p>`,
   });
 }
-
-export async function sendInvitationEmail(
-  to: string,
-  organizationName: string,
-  token: string,
-  role: string,
-): Promise<void> {
-  const url = `${config.clientUrl}/accept-invite?token=${token}`;
-  await sendEmail({
-    to,
-    subject: `You're invited to ${organizationName}`,
-    text: `You've been invited to join ${organizationName} as ${role}.\n\nAccept: ${url}\n`,
-    html: `<p>You've been invited to join <strong>${organizationName}</strong> as <strong>${role}</strong>.</p><p><a href="${url}">Accept invitation</a></p>`,
-  });
-}

@@ -305,6 +305,7 @@ export async function listNotifications(userId: string) {
     id: item._id.toString(),
     userId: item.userId.toString(),
     contractId: item.contractId ? item.contractId.toString() : undefined,
+    invitationId: item.invitationId ? item.invitationId.toString() : undefined,
     contractName: item.contractName || undefined,
     title: item.title,
     message: item.message,

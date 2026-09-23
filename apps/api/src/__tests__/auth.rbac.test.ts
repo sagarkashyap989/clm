@@ -6,7 +6,6 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 vi.mock('../utils/email.js', () => ({
   sendVerificationEmail: vi.fn(async () => undefined),
   sendPasswordResetEmail: vi.fn(async () => undefined),
-  sendInvitationEmail: vi.fn(async () => undefined),
 }));
 
 process.env.NODE_ENV = 'test';
@@ -167,6 +166,17 @@ describe('auth and RBAC', () => {
       .expect(201);
 
     const orgId = adminReg.body.data.organization.id as string;
+
+    await request
+      .agent(app)
+      .post('/api/v1/auth/register')
+      .send({
+        name: 'Invitee User',
+        email: 'invitee@acme.test',
+        password: 'password123',
+        organizationName: 'Invitee Org',
+      })
+      .expect(201);
 
     const invite = await adminAgent
       .post(`/api/v1/organizations/${orgId}/members/invite`)

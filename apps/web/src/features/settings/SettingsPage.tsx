@@ -152,6 +152,9 @@ export function SettingsPage() {
       {isAdmin ? (
         <section>
           <h2 className="text-lg font-semibold">Invite member</h2>
+          <p className="mt-1 text-sm text-ink-500">
+            They must already have an account. They’ll get an in-app notification to accept.
+          </p>
           <form
             className="mt-4 grid max-w-xl gap-3 sm:grid-cols-[1fr_140px_auto]"
             onSubmit={inviteForm.handleSubmit((values) => inviteMember.mutate(values))}
@@ -175,8 +178,8 @@ export function SettingsPage() {
           </form>
           {inviteMember.isSuccess ? (
             <p className="mt-2 text-sm text-accent">
-              Invitation sent. They must open the Mailhog link and accept it before they appear
-              as a member.
+              Invitation sent. They’ll see it in their notifications and must accept before they
+              appear as a member.
             </p>
           ) : null}
           {inviteMember.error ? (

@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { NotificationItem } from '@cml/shared';
 import { api } from '@/lib/api';
+import { useAuthStore, type Organization, type User } from '@/stores/auth';
 
 export function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { setSession } = useAuthStore();
 
   // Fetch notifications
   const { data } = useQuery({
@@ -51,6 +53,35 @@ export function NotificationDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const acceptInviteMutation = useMutation({
+    mutationFn: async (invitationId: string) => {
+      const data = await api<{ organization: Organization; role: string }>(
+        '/api/v1/organizations/invitations/accept',
+        { method: 'POST', body: JSON.stringify({ invitationId }) },
+      );
+      const me = await api<{
+        user: User;
+        memberships: {
+          id: string;
+          role: string;
+          organization: Organization | null;
+        }[];
+      }>('/api/v1/auth/me');
+      return { data, me };
+    },
+    onSuccess: ({ data, me }) => {
+      setSession({
+        user: me.user,
+        memberships: me.memberships,
+        organization: data.organization,
+        role: data.role,
+      });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      setIsOpen(false);
+      navigate('/dashboard');
+    },
+  });
+
   function handleNotificationClick(notif: NotificationItem) {
     if (!notif.isRead) {
       markReadMutation.mutate(notif.id);
@@ -67,6 +98,8 @@ export function NotificationDropdown() {
         return '💬';
       case 'version':
         return '📑';
+      case 'invite':
+        return '📨';
       case 'share':
         return '👥';
       case 'status':
@@ -155,6 +188,19 @@ export function NotificationDropdown() {
                       </span>
                     </div>
                     <p className="mt-0.5 text-[11px] text-ink-600 line-clamp-2">{notif.message}</p>
+                    {notif.type === 'invite' && notif.invitationId ? (
+                      <button
+                        type="button"
+                        className="mt-2 rounded-lg bg-accent px-2.5 py-1 text-[11px] font-semibold text-white"
+                        disabled={acceptInviteMutation.isPending}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          acceptInviteMutation.mutate(notif.invitationId!);
+                        }}
+                      >
+                        {acceptInviteMutation.isPending ? 'Joining…' : 'Accept invite'}
+                      </button>
+                    ) : null}
                     {notif.contractName && (
                       <span className="mt-1 inline-block text-[10px] font-semibold text-accent">
                         📄 {notif.contractName}

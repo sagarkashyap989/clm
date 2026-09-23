@@ -8,7 +8,12 @@ const notificationSchema = new Schema(
     contractName: { type: String, default: '' },
     title: { type: String, required: true },
     message: { type: String, required: true },
-    type: { type: String, enum: ['share', 'comment', 'status', 'version'], required: true },
+    invitationId: { type: Schema.Types.ObjectId, ref: 'Invitation', default: null },
+    type: {
+      type: String,
+      enum: ['share', 'comment', 'status', 'version', 'invite'],
+      required: true,
+    },
     isRead: { type: Boolean, default: false },
   },
   { timestamps: true },

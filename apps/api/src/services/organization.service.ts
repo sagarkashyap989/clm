@@ -5,8 +5,8 @@ import { Invitation } from '../models/Invitation.js';
 import { Membership } from '../models/Membership.js';
 import { Organization } from '../models/Organization.js';
 import { User } from '../models/User.js';
+import { Notification } from '../models/Notification.js';
 import { writeAuditLog } from '../repositories/audit.repository.js';
-import { sendInvitationEmail } from '../utils/email.js';
 import { AppError } from '../utils/errors.js';
 import { createToken, hashToken, verifyTokenHash } from '../utils/tokens.js';
 
@@ -88,15 +88,21 @@ export async function inviteMember(
 
   const email = input.email.toLowerCase();
   const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    const existingMembership = await Membership.findOne({
-      userId: existingUser._id,
-      organizationId,
-      status: MembershipStatus.ACTIVE,
-    });
-    if (existingMembership) {
-      throw new AppError(409, 'ALREADY_MEMBER', 'User is already a member');
-    }
+  if (!existingUser) {
+    throw new AppError(
+      404,
+      'USER_NOT_FOUND',
+      'No account exists for this email. They must register first.',
+    );
+  }
+
+  const existingMembership = await Membership.findOne({
+    userId: existingUser._id,
+    organizationId,
+    status: MembershipStatus.ACTIVE,
+  });
+  if (existingMembership) {
+    throw new AppError(409, 'ALREADY_MEMBER', 'User is already a member');
   }
 
   const existingInvite = await Invitation.findOne({
@@ -124,11 +130,14 @@ export async function inviteMember(
     invitedBy: actorId,
   });
 
-  try {
-    await sendInvitationEmail(email, org.name, token, input.role);
-  } catch (error) {
-    console.error('Failed to send invitation email', error);
-  }
+  await Notification.create({
+    userId: existingUser._id,
+    organizationId: org._id,
+    invitationId: invitation._id,
+    title: `Invited to ${org.name}`,
+    message: `You've been invited to join ${org.name} as ${input.role}. Open notifications to accept.`,
+    type: 'invite',
+  });
 
   await writeAuditLog({
     actorId,
@@ -240,6 +249,18 @@ export async function removeMember(
   return { ok: true };
 }
 
+async function findOpenInvitationById(invitationId: string) {
+  const invite = await Invitation.findOne({
+    _id: invitationId,
+    acceptedAt: null,
+    expiresAt: { $gt: new Date() },
+  });
+  if (!invite) {
+    throw new AppError(400, 'INVALID_INVITE', 'Invitation is invalid or expired');
+  }
+  return invite;
+}
+
 async function findOpenInvitationByToken(token: string) {
   const invitations = await Invitation.find({
     acceptedAt: null,
@@ -283,8 +304,13 @@ export async function listPendingInvitations(organizationId: string) {
   }));
 }
 
-export async function acceptInvitation(token: string, userId: string) {
-  const matched = await findOpenInvitationByToken(token);
+export async function acceptInvitation(
+  userId: string,
+  input: { invitationId?: string; token?: string },
+) {
+  const matched = input.invitationId
+    ? await findOpenInvitationById(input.invitationId)
+    : await findOpenInvitationByToken(input.token ?? '');
   const user = await User.findById(userId);
   if (!user) {
     throw new AppError(401, 'UNAUTHORIZED', 'User not found');
@@ -327,6 +353,11 @@ export async function acceptInvitation(token: string, userId: string) {
     matched.acceptedAt = new Date();
     await matched.save();
   }
+
+  await Notification.updateMany(
+    { invitationId: matched._id, userId: user._id },
+    { isRead: true },
+  );
 
   await writeAuditLog({
     actorId: user._id,
