@@ -10,6 +10,7 @@ type PdfDocumentViewerProps = {
     uploadedAt?: string;
   } | null;
   onSwitchToEditor?: () => void;
+  onDownload?: () => void | Promise<void>;
 };
 
 export function PdfDocumentViewer({
@@ -17,6 +18,7 @@ export function PdfDocumentViewer({
   counterparty,
   file,
   onSwitchToEditor,
+  onDownload,
 }: PdfDocumentViewerProps) {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const totalPages = 2;
@@ -25,7 +27,11 @@ export function PdfDocumentViewer({
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  function handleDownload() {
+  async function handleDownload() {
+    if (onDownload) {
+      await onDownload();
+      return;
+    }
     const fakeContent = `CLM Legal Contract Export: ${contractName}\nCounterparty: ${counterparty}\nGenerated on: ${new Date().toISOString()}`;
     const blob = new Blob([fakeContent], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);

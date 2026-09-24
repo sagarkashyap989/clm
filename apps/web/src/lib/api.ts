@@ -31,10 +31,18 @@ const SKIP_REFRESH_PATHS = [
 
 let refreshInFlight: Promise<boolean> | null = null;
 
-function requestHeaders(extra?: HeadersInit): HeadersInit {
+function isFormData(body: BodyInit | null | undefined): boolean {
+  return typeof FormData !== 'undefined' && body instanceof FormData;
+}
+
+function requestHeaders(
+  extra?: HeadersInit,
+  body?: BodyInit | null,
+  json = true,
+): HeadersInit {
   const organizationId = useAuthStore.getState().currentOrg?.id;
   return {
-    'Content-Type': 'application/json',
+    ...(json && !isFormData(body) ? { 'Content-Type': 'application/json' } : {}),
     ...(organizationId ? { 'X-Organization-Id': organizationId } : {}),
     ...(extra ?? {}),
   };
@@ -85,7 +93,7 @@ export async function api<T>(
     fetch(`${API_BASE}${path}`, {
       ...options,
       credentials: 'include',
-      headers: requestHeaders(options.headers),
+      headers: requestHeaders(options.headers, options.body ?? null),
     });
 
   let response = await doFetch();
@@ -101,4 +109,46 @@ export async function api<T>(
   }
 
   return parseResponse<T>(response);
+}
+
+export async function downloadFile(path: string, fallbackName: string): Promise<void> {
+  const doFetch = () =>
+    fetch(`${API_BASE}${path}`, {
+      credentials: 'include',
+      headers: requestHeaders(undefined, null, false),
+    });
+
+  let response = await doFetch();
+  const canRefresh =
+    response.status === 401 && !SKIP_REFRESH_PATHS.some((skip) => path.startsWith(skip));
+  if (canRefresh) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      response = await doFetch();
+    }
+  }
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as ApiErrorPayload;
+    throw new ApiClientError(
+      response.status,
+      body.error?.code ?? 'REQUEST_FAILED',
+      body.error?.message ?? 'Download failed',
+      body.error?.details,
+    );
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+  const fileName = decodeURIComponent(utfMatch?.[1] ?? plainMatch?.[1] ?? fallbackName);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }

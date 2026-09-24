@@ -292,7 +292,7 @@ export type ContractShare = {
 
 export const createCommentSchema = z.object({
   content: z.string().min(1, 'Comment cannot be empty').max(2000),
-  quoteText: z.string().optional(),
+  quoteText: z.string().max(2000).optional(),
   versionNumber: z.number().optional(),
 });
 

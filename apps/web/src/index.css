@@ -19,3 +19,50 @@ body {
 #root {
   min-height: 100vh;
 }
+
+#contract-editable-content table,
+#contract-editable-content .imported-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.9em;
+  table-layout: auto;
+}
+
+#contract-editable-content th,
+#contract-editable-content td {
+  border: 1px solid #94a3b8;
+  padding: 0.5rem 0.7rem;
+  vertical-align: top;
+  text-align: left;
+}
+
+#contract-editable-content th {
+  background: #f1f5f9;
+  font-weight: 700;
+}
+
+#contract-editable-content td p,
+#contract-editable-content th p {
+  margin: 0 0 0.35rem;
+}
+
+#contract-editable-content td p:last-child,
+#contract-editable-content th p:last-child {
+  margin-bottom: 0;
+}
+
+#contract-editable-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+::highlight(cml-comment-open) {
+  background-color: rgb(253 224 71 / 0.55);
+}
+::highlight(cml-comment-resolved) {
+  background-color: rgb(226 232 240 / 0.8);
+}
+::highlight(cml-comment-active) {
+  background-color: rgb(251 146 60 / 0.75);
+}

@@ -7,12 +7,16 @@ type ContractCommentsPanelProps = {
   contractId: string;
   currentVersionNumber?: number;
   readOnly?: boolean;
+  onOpenQuote?: (commentId: string, quoteText: string) => void;
+  activeCommentId?: string | null;
 };
 
 export function ContractCommentsPanel({
   contractId,
   currentVersionNumber = 1,
   readOnly = false,
+  onOpenQuote,
+  activeCommentId = null,
 }: ContractCommentsPanelProps) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'active' | 'resolved'>('active');
@@ -117,7 +121,7 @@ export function ContractCommentsPanel({
         <div>
           <h3 className="font-serif text-base font-bold text-ink-950">Clause Comments & Feedback</h3>
           <p className="text-xs text-ink-500">
-            Collaborative annotations and legal review threads.
+            Collaborative annotations. Select text in the Workspace tab to comment on a clause.
           </p>
         </div>
 
@@ -223,16 +227,26 @@ export function ContractCommentsPanel({
             <div
               key={comment.id}
               className={`rounded-xl border p-4 transition ${
-                comment.isResolved
-                  ? 'border-ink-100 bg-slate-50/70 opacity-80'
-                  : 'border-ink-200 bg-white shadow-xs'
+                comment.id === activeCommentId
+                  ? 'border-accent ring-1 ring-accent/30 bg-white shadow-xs'
+                  : comment.isResolved
+                    ? 'border-ink-100 bg-slate-50/70 opacity-80'
+                    : 'border-ink-200 bg-white shadow-xs'
               }`}
             >
-              {/* Quoted Text if any */}
               {comment.quoteText && (
-                <div className="mb-3 rounded-lg border-l-2 border-accent bg-accent/5 p-2 text-xs italic text-ink-700">
+                <button
+                  type="button"
+                  onClick={() => onOpenQuote?.(comment.id, comment.quoteText!)}
+                  className="mb-3 w-full rounded-lg border-l-2 border-accent bg-accent/5 p-2 text-left text-xs italic text-ink-700 hover:bg-accent/10"
+                >
                   &ldquo;{comment.quoteText}&rdquo;
-                </div>
+                  {onOpenQuote ? (
+                    <span className="mt-1 block text-[10px] not-italic font-semibold text-accent">
+                      Show in document
+                    </span>
+                  ) : null}
+                </button>
               )}
 
               {/* Comment Header */}

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as contractController from '../controllers/contract.controller.js';
 import { requireActiveOrganization, requireAuth } from '../middlewares/auth.js';
+import { contractFileUpload } from '../middlewares/upload.js';
 
 export const contractRouter = Router();
 
@@ -9,7 +10,8 @@ contractRouter.use(requireAuth, requireActiveOrganization);
 contractRouter.get('/dashboard-summary', contractController.getDashboardSummary);
 contractRouter.get('/shared-with-me', contractController.listSharedWithMe);
 contractRouter.get('/', contractController.listContracts);
-contractRouter.post('/', contractController.createContract);
+contractRouter.post('/', contractFileUpload, contractController.createContract);
+contractRouter.get('/:id/file', contractController.downloadOriginalFile);
 contractRouter.get('/:id', contractController.getContract);
 contractRouter.patch('/:id', contractController.updateContract);
 contractRouter.delete('/:id', contractController.deleteContract);

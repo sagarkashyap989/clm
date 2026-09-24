@@ -48,9 +48,45 @@ export const getContract = asyncHandler(async (req: Request, res: Response) => {
 
 export const createContract = asyncHandler(async (req: Request, res: Response) => {
   const orgId = getOrgId(req);
-  const parsed = createContractSchema.parse(req.body);
-  const contract = await contractService.createContract(orgId, req.user!.id, parsed);
+  const body = { ...req.body } as Record<string, unknown>;
+  const rawTags = body.tags;
+  if (typeof rawTags === 'string' && rawTags.trim()) {
+    try {
+      body.tags = JSON.parse(rawTags);
+    } catch {
+      body.tags = rawTags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+    }
+  } else if (rawTags === '') {
+    delete body.tags;
+  }
+  const parsed = createContractSchema.parse(body);
+  const uploaded = req.file
+    ? {
+        buffer: req.file.buffer,
+        fileName: req.file.originalname,
+        mimeType: req.file.mimetype || 'application/octet-stream',
+        size: req.file.size,
+      }
+    : undefined;
+  const contract = await contractService.createContract(
+    orgId,
+    req.user!.id,
+    parsed,
+    uploaded,
+  );
   res.status(201).json({ data: { contract } });
+});
+
+export const downloadOriginalFile = asyncHandler(async (req: Request, res: Response) => {
+  const orgId = await getContractOrgId(req);
+  const file = await contractService.getOriginalFile(paramId(req.params.id), orgId);
+  const encodedName = encodeURIComponent(file.fileName);
+  res.setHeader('Content-Type', file.mimeType);
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedName}`);
+  res.send(file.body);
 });
 
 export const updateContract = asyncHandler(async (req: Request, res: Response) => {

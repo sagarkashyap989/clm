@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import multer from 'multer';
 import { ZodError, type ZodSchema } from 'zod';
 import { AppError, isAppError } from '../utils/errors.js';
 
@@ -19,6 +20,19 @@ export function errorHandler(
   res: Response,
   _next: NextFunction,
 ): void {
+  if (err instanceof multer.MulterError) {
+    const tooLarge = err.code === 'LIMIT_FILE_SIZE';
+    res.status(400).json({
+      error: {
+        code: tooLarge ? 'FILE_TOO_LARGE' : 'UPLOAD_ERROR',
+        message: tooLarge
+          ? 'File exceeds maximum allowed size of 25MB.'
+          : err.message,
+      },
+    });
+    return;
+  }
+
   if (err instanceof ZodError) {
     res.status(400).json({
       error: {

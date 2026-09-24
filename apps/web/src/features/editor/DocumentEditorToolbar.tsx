@@ -3,6 +3,7 @@ import { type MouseEvent } from 'react';
 type DocumentEditorToolbarProps = {
   onCommand: (command: string, value?: string) => void;
   onToggleFind: () => void;
+  onCommentSelection?: () => void;
   isFindOpen: boolean;
   canUndo?: boolean;
   canRedo?: boolean;
@@ -12,6 +13,7 @@ type DocumentEditorToolbarProps = {
 export function DocumentEditorToolbar({
   onCommand,
   onToggleFind,
+  onCommentSelection,
   isFindOpen,
   readOnly = false,
 }: DocumentEditorToolbarProps) {
@@ -185,6 +187,17 @@ export function DocumentEditorToolbar({
 
       {/* Find & Replace Toggle */}
       <div className="ml-auto flex items-center gap-1">
+        {onCommentSelection ? (
+          <button
+            type="button"
+            title="Comment on selected text (Ctrl+M)"
+            disabled={readOnly}
+            onClick={onCommentSelection}
+            className="rounded-lg px-2 py-1 text-xs font-semibold text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+          >
+            Comment
+          </button>
+        ) : null}
         <button
           type="button"
           id="toggle-find-replace-btn"

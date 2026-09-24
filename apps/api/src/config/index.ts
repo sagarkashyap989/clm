@@ -35,4 +35,14 @@ export const config = {
     pass: process.env.SMTP_PASS || undefined,
   },
   invitationExpiresDays: Number(process.env.INVITATION_EXPIRES_DAYS ?? 7),
+  storage: {
+    bucket: process.env.AWS_S3_BUCKET ?? '',
+    endpoint: process.env.AWS_S3_ENDPOINT ?? '',
+    region: process.env.AWS_REGION ?? 'us-east-1',
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
+    forcePathStyle: process.env.AWS_S3_FORCE_PATH_STYLE !== 'false',
+    localDir: process.env.FILE_STORAGE_DIR ?? 'uploads',
+    maxFileSize: Number(process.env.MAX_FILE_SIZE ?? 25 * 1024 * 1024),
+  },
 };

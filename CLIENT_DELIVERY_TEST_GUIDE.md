@@ -77,8 +77,8 @@ Test these so you can tell the client what is real vs demo:
 | --- | --- | --- |
 | Contract **Share** (internal + external link) | UI exists; **no** `/shares` or `/shared-with-me` routes on Express | Expect 404 / empty “Shared with me” against live API |
 | Dashboard **Shared with me** count | Always `0` on live API | Placeholder until sharing is persisted |
-| PDF viewer | Simulated pages, zoom, rotate, search, download | Download is a generated blob, not the original PDF bytes |
-| File storage (MinIO / S3) | Compose includes MinIO; contracts store metadata / optional base64 | Not a full object-storage pipeline |
+| PDF viewer | Simulated pages; **download is the original file** | Viewer still does not render real PDF pages |
+| File storage (MinIO / S3) | Live: files stored in MinIO (or local `uploads/` fallback) | Word/TXT imported into the editor; original download works |
 | Audit logs | Written in MongoDB | **No** in-app audit UI |
 | Automated tests | `npm run test --workspace=@cml/api` (auth/RBAC) | Web has no UI tests |
 
@@ -401,7 +401,7 @@ Upload or open a contract whose file name ends with `.pdf` (viewer opens by defa
 - [ ] Rotate 90°
 - [ ] In-viewer search
 - [ ] Switch to editor and back
-- [ ] Download starts a file (content may be a placeholder export, not the original PDF)
+- [ ] Download returns the original uploaded PDF bytes
 
 ---
 

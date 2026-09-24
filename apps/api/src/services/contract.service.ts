@@ -1,16 +1,57 @@
-import { MembershipStatus } from '@cml/shared';
+import { MembershipStatus, VersionSource } from '@cml/shared';
 import mongoose, { type Types } from 'mongoose';
+import { randomUUID } from 'node:crypto';
+import { config } from '../config/index.js';
 import { Contract } from '../models/Contract.js';
 import { DocumentVersion } from '../models/DocumentVersion.js';
 import { Membership } from '../models/Membership.js';
 import { writeAuditLog } from '../repositories/audit.repository.js';
 import { AppError } from '../utils/errors.js';
+import { assertAllowedUpload, extractEditorContent } from '../utils/extractDocument.js';
+import { getObject, putObject } from '../utils/storage.js';
 import type {
   CreateContractInput,
   UpdateContractInput,
   ContractQueryInput,
   CreateVersionInput,
 } from '@cml/shared';
+
+function publicOriginalFile(file: {
+  fileName?: string | null;
+  mimeType?: string | null;
+  size?: number | null;
+  uploadedAt?: Date | string | null;
+} | null | undefined) {
+  if (!file?.fileName) {
+    return null;
+  }
+  return {
+    fileName: file.fileName,
+    mimeType: file.mimeType ?? 'application/octet-stream',
+    size: file.size ?? 0,
+    uploadedAt:
+      file.uploadedAt instanceof Date
+        ? file.uploadedAt.toISOString()
+        : file.uploadedAt ?? null,
+  };
+}
+
+function decodeBase64File(data: string): Buffer {
+  const comma = data.indexOf(',');
+  const raw = comma >= 0 ? data.slice(comma + 1) : data;
+  return Buffer.from(raw, 'base64');
+}
+
+function safeFileName(fileName: string) {
+  return fileName.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 180) || 'document';
+}
+
+export type UploadedContractFile = {
+  buffer: Buffer;
+  fileName: string;
+  mimeType: string;
+  size: number;
+};
 
 export async function listContracts(
   organizationId: string | Types.ObjectId,
@@ -72,7 +113,7 @@ export async function listContracts(
       startDate: c.startDate ? c.startDate.toISOString() : null,
       endDate: c.endDate ? c.endDate.toISOString() : null,
       tags: c.tags ?? [],
-      originalFile: c.originalFile ?? null,
+      originalFile: publicOriginalFile(c.originalFile),
       currentVersionNumber: c.currentVersionNumber,
       owner: c.ownerId,
       createdBy: c.createdBy,
@@ -142,7 +183,7 @@ export async function getContract(
     startDate: contract.startDate ? contract.startDate.toISOString() : null,
     endDate: contract.endDate ? contract.endDate.toISOString() : null,
     tags: contract.tags ?? [],
-    originalFile: contract.originalFile ?? null,
+    originalFile: publicOriginalFile(contract.originalFile),
     currentVersionNumber: contract.currentVersionNumber,
     owner: contract.ownerId,
     createdBy: contract.createdBy,
@@ -155,7 +196,63 @@ export async function createContract(
   organizationId: string,
   userId: string,
   input: CreateContractInput,
+  uploadedFile?: UploadedContractFile,
 ) {
+  let fileBytes = uploadedFile;
+  if (!fileBytes && input.file?.base64Data) {
+    const buffer = decodeBase64File(input.file.base64Data);
+    fileBytes = {
+      buffer,
+      fileName: input.file.fileName,
+      mimeType: input.file.mimeType,
+      size: input.file.size || buffer.length,
+    };
+  }
+
+  let originalFile:
+    | {
+        fileName: string;
+        mimeType: string;
+        size: number;
+        storageKey: string;
+        uploadedAt: Date;
+      }
+    | undefined;
+  let editorHtml = '';
+  let searchableText = '';
+
+  if (fileBytes) {
+    assertAllowedUpload(fileBytes.fileName, fileBytes.size, config.storage.maxFileSize);
+    const storageKey = `contracts/${organizationId}/${randomUUID()}-${safeFileName(fileBytes.fileName)}`;
+    try {
+      await putObject(storageKey, fileBytes.buffer, fileBytes.mimeType);
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError(
+        503,
+        'STORAGE_UNAVAILABLE',
+        'File storage is not available. Start MinIO with docker compose, or unset AWS_S3_BUCKET to use local disk.',
+      );
+    }
+    const extracted = await extractEditorContent(fileBytes.fileName, fileBytes.buffer).catch(
+      () => ({
+        html: '<p>(Could not extract text from this file. Download the original.)</p>',
+        searchableText: '',
+      }),
+    );
+    editorHtml = extracted.html;
+    searchableText = extracted.searchableText;
+    originalFile = {
+      fileName: fileBytes.fileName,
+      mimeType: fileBytes.mimeType,
+      size: fileBytes.size,
+      storageKey,
+      uploadedAt: new Date(),
+    };
+  }
+
   const contract = await Contract.create({
     organizationId,
     name: input.name,
@@ -166,18 +263,30 @@ export async function createContract(
     startDate: input.startDate ? new Date(input.startDate) : null,
     endDate: input.endDate ? new Date(input.endDate) : null,
     tags: input.tags ?? [],
-    originalFile: input.file
-      ? {
-          fileName: input.file.fileName,
-          mimeType: input.file.mimeType,
-          size: input.file.size,
-          storageKey: input.file.storageKey ?? `contracts/${organizationId}/${Date.now()}-${input.file.fileName}`,
-          uploadedAt: new Date(),
-        }
-      : undefined,
+    originalFile,
+    draftContent: editorHtml || null,
+    searchableText,
     createdBy: userId,
     status: 'draft',
   });
+
+  if (originalFile && editorHtml) {
+    await DocumentVersion.create({
+      contractId: contract._id,
+      organizationId,
+      versionNumber: 1,
+      createdBy: userId,
+      source: VersionSource.UPLOAD,
+      file: {
+        fileName: originalFile.fileName,
+        mimeType: originalFile.mimeType,
+        size: originalFile.size,
+        storageKey: originalFile.storageKey,
+      },
+      editorContent: editorHtml,
+      changeDescription: `Imported from ${originalFile.fileName}`,
+    });
+  }
 
   await writeAuditLog({
     actorId: userId,
@@ -188,11 +297,33 @@ export async function createContract(
     metadata: {
       name: contract.name,
       type: contract.type,
-      hasFile: Boolean(input.file),
+      hasFile: Boolean(originalFile),
     },
   });
 
   return getContract(contract._id.toString(), organizationId);
+}
+
+export async function getOriginalFile(
+  contractId: string,
+  organizationId: string,
+) {
+  const contract = await Contract.findOne({
+    _id: contractId,
+    organizationId,
+    deletedAt: null,
+  }).lean();
+
+  if (!contract?.originalFile?.storageKey || !contract.originalFile.fileName) {
+    throw new AppError(404, 'FILE_NOT_FOUND', 'No original file is attached to this contract');
+  }
+
+  const stored = await getObject(contract.originalFile.storageKey);
+  return {
+    body: stored.body,
+    fileName: contract.originalFile.fileName,
+    mimeType: stored.contentType || contract.originalFile.mimeType || 'application/octet-stream',
+  };
 }
 
 export async function updateContract(

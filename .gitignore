@@ -10,3 +10,5 @@ coverage
 .turbo
 *.tsbuildinfo
 .vite
+uploads
+apps/api/uploads

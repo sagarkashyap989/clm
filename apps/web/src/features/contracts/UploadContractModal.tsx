@@ -4,7 +4,6 @@ import {
   CONTRACT_TYPES,
   CONTRACT_TYPE_LABELS,
   type ContractType,
-  type CreateContractInput,
 } from '@cml/shared';
 import { api } from '@/lib/api';
 
@@ -33,10 +32,10 @@ export function UploadContractModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const createMutation = useMutation({
-    mutationFn: async (payload: CreateContractInput) => {
-      return api<{ contract: any }>('/api/v1/contracts', {
+    mutationFn: async (formData: FormData) => {
+      return api<{ contract: { id: string } }>('/api/v1/contracts', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: formData,
       });
     },
     onSuccess: () => {
@@ -120,24 +119,17 @@ export function UploadContractModal({
       .map((t) => t.trim())
       .filter(Boolean);
 
-    const payload: CreateContractInput = {
-      name: name.trim(),
-      type,
-      counterparty: counterparty.trim() || undefined,
-      description: description.trim() || undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
-      tags: tags.length ? tags : undefined,
-      file: file
-        ? {
-            fileName: file.name,
-            mimeType: file.type || 'application/octet-stream',
-            size: file.size,
-          }
-        : undefined,
-    };
+    const formData = new FormData();
+    formData.append('name', name.trim());
+    formData.append('type', type);
+    if (counterparty.trim()) formData.append('counterparty', counterparty.trim());
+    if (description.trim()) formData.append('description', description.trim());
+    if (startDate) formData.append('startDate', startDate);
+    if (endDate) formData.append('endDate', endDate);
+    if (tags.length) formData.append('tags', JSON.stringify(tags));
+    if (file) formData.append('file', file);
 
-    createMutation.mutate(payload);
+    createMutation.mutate(formData);
   }
 
   return (
@@ -158,7 +150,7 @@ export function UploadContractModal({
               Upload Contract
             </h2>
             <p className="mt-0.5 text-xs text-ink-500">
-              Add a contract document and record metadata into the repository
+              PDF, Word (.docx), or text. Word content is imported into the editor. Max 25 MB.
             </p>
           </div>
           <button

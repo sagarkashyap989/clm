@@ -9,7 +9,7 @@ import {
   type ContractStatus,
   type DocumentVersion,
 } from '@cml/shared';
-import { api } from '@/lib/api';
+import { api, downloadFile } from '@/lib/api';
 import { getStatusBadgeClass, type ContractItem } from './ContractsPage';
 import { DocumentEditorCanvas } from '../editor/DocumentEditorCanvas';
 import { PdfDocumentViewer } from '../editor/PdfDocumentViewer';
@@ -33,6 +33,7 @@ export function ContractDetailPage() {
   const [autosaveStatus, setAutosaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'editor' | 'pdf'>('editor');
+  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
 
   // Modals state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -633,6 +634,12 @@ export function ContractDetailPage() {
               contractName={contract.name}
               counterparty={contract.counterparty || 'External Party'}
               file={contract.originalFile}
+              onDownload={() =>
+                downloadFile(
+                  `/api/v1/contracts/${contract.id}/file`,
+                  contract.originalFile?.fileName || `${contract.name}.pdf`,
+                )
+              }
               onSwitchToEditor={() => setViewMode('editor')}
             />
           ) : (
@@ -642,6 +649,24 @@ export function ContractDetailPage() {
               onTriggerSaveVersion={() => setIsSaveModalOpen(true)}
               autosaveStatus={autosaveStatus}
               lastSavedAt={lastSavedAt}
+              quotedPassages={(commentsData?.comments ?? []).map((comment) => ({
+                id: comment.id,
+                quoteText: comment.quoteText ?? '',
+                isResolved: comment.isResolved,
+              }))}
+              activeQuoteId={activeQuoteId}
+              onCreateSelectionComment={async ({ quoteText, content }) => {
+                await api(`/api/v1/contracts/${contract.id}/comments`, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    content,
+                    quoteText,
+                    versionNumber: currentVersionNumber,
+                  }),
+                });
+                await queryClient.invalidateQueries({ queryKey: ['contract-comments', contractId] });
+                await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+              }}
             />
           )}
         </div>
@@ -806,15 +831,18 @@ export function ContractDetailPage() {
                   </div>
 
                   <div className="mt-4 flex gap-2">
-                    <a
-                      href={`data:application/octet-stream;charset=utf-8,${encodeURIComponent(
-                        `Contract: ${contract.name}\nType: ${contract.type}\nStatus: ${contract.status}\nCounterparty: ${contract.counterparty}`,
-                      )}`}
-                      download={contract.originalFile.fileName}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void downloadFile(
+                          `/api/v1/contracts/${contract.id}/file`,
+                          contract.originalFile!.fileName,
+                        )
+                      }
                       className="flex-1 rounded-xl bg-accent px-3 py-2 text-center text-xs font-semibold text-white transition hover:opacity-90"
                     >
                       Download File
-                    </a>
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -833,6 +861,12 @@ export function ContractDetailPage() {
           <ContractCommentsPanel
             contractId={contract.id}
             currentVersionNumber={currentVersionNumber}
+            activeCommentId={activeQuoteId}
+            onOpenQuote={(commentId) => {
+              setActiveQuoteId(commentId);
+              setActiveTab('workspace');
+              setViewMode('editor');
+            }}
           />
         </div>
       )}
