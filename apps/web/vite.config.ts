@@ -1305,6 +1305,7 @@ export default defineConfig(({ mode }) => {
         : {
             '/api': { target: apiTarget, changeOrigin: true },
             '/health': { target: apiTarget, changeOrigin: true },
+            '/socket.io': { target: apiTarget, ws: true, changeOrigin: true },
           },
     },
     build: {

@@ -9,9 +9,14 @@ export type CollaborationConnectionState =
 interface CollaborationStatusProps {
   status: CollaborationConnectionState;
   onRetry?: () => void;
+  errorMessage?: string | null;
 }
 
-export const CollaborationStatus: FC<CollaborationStatusProps> = ({ status, onRetry }) => {
+export const CollaborationStatus: FC<CollaborationStatusProps> = ({
+  status,
+  onRetry,
+  errorMessage,
+}) => {
   return (
     <div className="flex items-center gap-2">
       {status === 'connected' && (
@@ -48,7 +53,11 @@ export const CollaborationStatus: FC<CollaborationStatusProps> = ({ status, onRe
         <div className="flex items-center gap-1.5">
           <span
             className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 ring-1 ring-rose-600/20"
-            title="Disconnected from live collaboration. Local changes are preserved."
+            title={
+              errorMessage
+                ? `Disconnected from live collaboration (${errorMessage}). Local drafts still autosave via REST.`
+                : 'Disconnected from live collaboration. Local changes are preserved.'
+            }
           >
             <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
             <span>⚠ Offline</span>

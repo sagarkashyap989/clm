@@ -32,6 +32,7 @@ interface CollaborationContextValue {
   restoreVersion: (versionNumber: number, content: string) => void;
   notifications: Array<{ id: string; message: string; timestamp: number }>;
   dismissNotification: (id: string) => void;
+  errorMessage: string | null;
   onRemotePatch?: (patch: DocumentPatch) => void;
   setOnRemotePatch: (handler: ((patch: DocumentPatch) => void) | null) => void;
   onVersionRestored?: (payload: VersionRestoreBroadcast) => void;
@@ -64,6 +65,7 @@ export const CollaborationProvider: FC<CollaborationProviderProps> = ({
 }) => {
   const { user, currentOrg, currentRole } = useAuthStore();
   const [status, setStatus] = useState<CollaborationConnectionState>('connecting');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeUsers, setActiveUsers] = useState<CollaboratorPresence[]>([]);
   const [currentSocketId, setCurrentSocketId] = useState<string | null>(null);
   const [latestRevision, setLatestRevision] = useState(0);
@@ -128,20 +130,28 @@ export const CollaborationProvider: FC<CollaborationProviderProps> = ({
       },
     };
 
-    const socket = io('/', {
+    const socketBase =
+      (import.meta.env.VITE_SOCKET_URL as string) ||
+      (import.meta.env.VITE_API_URL as string) ||
+      undefined;
+
+    const socket = io(socketBase, {
       path: '/socket.io/',
       auth: authPayload,
       query: { contractId },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
-      reconnectionAttempts: 15,
+      reconnectionAttempts: 25,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
     });
 
     socketRef.current = socket;
 
     socket.on('connect', () => {
       setStatus('connected');
+      setErrorMessage(null);
       setCurrentSocketId(socket.id || null);
     });
 
@@ -153,7 +163,18 @@ export const CollaborationProvider: FC<CollaborationProviderProps> = ({
       }
     });
 
-    socket.on('connect_error', () => {
+    socket.on('connect_error', (err) => {
+      console.warn('[Collaboration Connection Error]', err?.message || err);
+      setErrorMessage(err?.message || 'WebSocket connection error');
+      if (socket.active) {
+        setStatus('reconnecting');
+      } else {
+        setStatus('disconnected');
+      }
+    });
+
+    socket.io.on('reconnect_failed', () => {
+      setErrorMessage('Reconnection failed. The collaboration server may not be reachable.');
       setStatus('disconnected');
     });
 
@@ -163,6 +184,7 @@ export const CollaborationProvider: FC<CollaborationProviderProps> = ({
 
     socket.on('reconnect', () => {
       setStatus('connected');
+      setErrorMessage(null);
     });
 
     socket.on('doc:sync_init', (payload: RoomSyncPayload) => {
@@ -267,6 +289,7 @@ export const CollaborationProvider: FC<CollaborationProviderProps> = ({
         restoreVersion,
         notifications,
         dismissNotification,
+        errorMessage,
         setOnRemotePatch,
         setOnVersionRestored,
         setOnInitialSync,

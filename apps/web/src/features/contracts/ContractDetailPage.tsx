@@ -52,6 +52,7 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
     restoreVersion: broadcastVersionRestore,
     notifications,
     dismissNotification,
+    errorMessage: collabError,
     setOnRemotePatch,
     setOnVersionRestored,
     setOnInitialSync,
@@ -396,7 +397,11 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
         className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink-100 bg-white px-5 py-3 shadow-xs"
       >
         <div className="flex flex-wrap items-center gap-3">
-          <CollaborationStatus status={collabStatus} onRetry={retryConnection} />
+          <CollaborationStatus
+            status={collabStatus}
+            onRetry={retryConnection}
+            errorMessage={collabError}
+          />
           <div className="hidden sm:block h-4 w-px bg-ink-200" />
           <PresenceAvatars users={activeUsers} currentUserId={user?.id} />
         </div>
