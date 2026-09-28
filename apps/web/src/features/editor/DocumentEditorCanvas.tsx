@@ -12,6 +12,8 @@ import {
   rangeForQuote,
   type QuotedPassage,
 } from './quoteHighlight';
+import { CollaboratorCursors } from './collaboration/CollaboratorCursors';
+import type { CollaboratorPresence, CursorPosition, SelectionRange } from '@cml/shared';
 
 type DocumentEditorCanvasProps = {
   initialContent: string;
@@ -26,6 +28,12 @@ type DocumentEditorCanvasProps = {
     quoteText: string;
     content: string;
   }) => Promise<void>;
+  activeUsers?: CollaboratorPresence[];
+  currentUserId?: string;
+  onBroadcastCursor?: (cursor: CursorPosition | null) => void;
+  onBroadcastSelection?: (selection: SelectionRange | null) => void;
+  notifications?: Array<{ id: string; message: string; timestamp: number }>;
+  onDismissNotification?: (id: string) => void;
 };
 
 export function DocumentEditorCanvas({
@@ -38,6 +46,12 @@ export function DocumentEditorCanvas({
   quotedPassages = [],
   activeQuoteId = null,
   onCreateSelectionComment,
+  activeUsers = [],
+  currentUserId,
+  onBroadcastCursor,
+  onBroadcastSelection,
+  notifications = [],
+  onDismissNotification,
 }: DocumentEditorCanvasProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isFindOpen, setIsFindOpen] = useState(false);
@@ -58,13 +72,73 @@ export function DocumentEditorCanvas({
   const [commentSaving, setCommentSaving] = useState(false);
   const pageRef = useRef<HTMLDivElement>(null);
 
-  // Initialize editor content once
+  const calculateMetrics = useCallback(() => {
+    if (!editorRef.current) return;
+    const text = editorRef.current.innerText || '';
+    const trimmed = text.trim();
+    const words = trimmed ? trimmed.split(/\s+/).length : 0;
+    const chars = text.length;
+    setWordCount(words);
+    setCharCount(chars);
+  }, []);
+
+  // Initialize editor content once or when remote collaborative patches arrive
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== initialContent) {
-      editorRef.current.innerHTML = initialContent || '<p>Start typing your contract clauses here...</p>';
-      calculateMetrics();
+      const isFocused =
+        document.activeElement === editorRef.current ||
+        Boolean(editorRef.current.contains(document.activeElement));
+
+      if (!isFocused) {
+        editorRef.current.innerHTML = initialContent || '<p>Start typing your contract clauses here...</p>';
+        calculateMetrics();
+      } else {
+        const sel = window.getSelection();
+        let savedRange: Range | null = null;
+        if (sel && sel.rangeCount > 0) {
+          try {
+            savedRange = sel.getRangeAt(0).cloneRange();
+          } catch {
+            savedRange = null;
+          }
+        }
+        editorRef.current.innerHTML = initialContent || '<p>Start typing your contract clauses here...</p>';
+        calculateMetrics();
+        if (savedRange && sel) {
+          try {
+            sel.removeAllRanges();
+            sel.addRange(savedRange);
+          } catch {
+            // Ignore if DOM elements restructured
+          }
+        }
+      }
     }
-  }, [initialContent]);
+  }, [initialContent, calculateMetrics]);
+
+  const broadcastLocalCursor = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount || !pageRef.current || !editorRef.current) return;
+    const anchorNode = selection.anchorNode;
+    if (!anchorNode || !editorRef.current.contains(anchorNode)) {
+      onBroadcastCursor?.(null);
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const pageRect = pageRef.current.getBoundingClientRect();
+    if (pageRect.width > 0 && pageRect.height > 0) {
+      const xRatio = Math.max(0, Math.min(1, (rect.left - pageRect.left) / pageRect.width));
+      const yRatio = Math.max(0, Math.min(1, (rect.top - pageRect.top) / pageRect.height));
+      onBroadcastCursor?.({ xRatio, yRatio });
+    }
+    if (!selection.isCollapsed) {
+      const quote = selection.toString().replace(/\s+/g, ' ').trim();
+      onBroadcastSelection?.({ quoteText: quote.slice(0, 500) });
+    } else {
+      onBroadcastSelection?.(null);
+    }
+  }, [onBroadcastCursor, onBroadcastSelection]);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -82,20 +156,11 @@ export function DocumentEditorCanvas({
     el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [activeQuoteId, quotedPassages]);
 
-  const calculateMetrics = useCallback(() => {
-    if (!editorRef.current) return;
-    const text = editorRef.current.innerText || '';
-    const trimmed = text.trim();
-    const words = trimmed ? trimmed.split(/\s+/).length : 0;
-    const chars = text.length;
-    setWordCount(words);
-    setCharCount(chars);
-  }, []);
-
   function handleInput() {
     if (!editorRef.current) return;
     calculateMetrics();
     onContentChange(editorRef.current.innerHTML);
+    broadcastLocalCursor();
     if (editorRef.current) {
       applyQuoteHighlights(editorRef.current, quotedPassages, activeQuoteId);
     }
@@ -111,6 +176,7 @@ export function DocumentEditorCanvas({
   }
 
   function captureSelection() {
+    broadcastLocalCursor();
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || !editorRef.current) {
       if (!commentOpen) setSelectionMenu(null);
@@ -318,6 +384,9 @@ export function DocumentEditorCanvas({
               <span>Confidential</span>
             </div>
 
+            {/* Real-time collaborator cursors & selection overlays */}
+            <CollaboratorCursors presences={activeUsers} currentUserId={currentUserId} />
+
             {/* Editable rich-text canvas */}
             <div
               ref={editorRef}
@@ -328,7 +397,7 @@ export function DocumentEditorCanvas({
               onKeyDown={handleKeyDown}
               onMouseUp={captureSelection}
               onKeyUp={captureSelection}
-              className="editor-doc prose prose-slate max-w-none text-ink-900 focus:outline-none [&>blockquote]:border-l-4 [&>blockquote]:border-accent [&>blockquote]:bg-slate-50 [&>blockquote]:p-3 [&>h2]:mb-3 [&>h2]:mt-6 [&>h2]:font-serif [&>h2]:text-xl [&>h2]:font-bold [&>h2]:text-ink-950 [&>h3]:mb-2 [&>h3]:mt-4 [&>h3]:font-serif [&>h3]:text-base [&>h3]:font-semibold [&>h3]:text-ink-900 [&>p]:mb-3 [&>p]:leading-relaxed [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5"
+              className="editor-doc relative z-10 prose prose-slate max-w-none text-ink-900 focus:outline-none [&>blockquote]:border-l-4 [&>blockquote]:border-accent [&>blockquote]:bg-slate-50 [&>blockquote]:p-3 [&>h2]:mb-3 [&>h2]:mt-6 [&>h2]:font-serif [&>h2]:text-xl [&>h2]:font-bold [&>h2]:text-ink-950 [&>h3]:mb-2 [&>h3]:mt-4 [&>h3]:font-serif [&>h3]:text-base [&>h3]:font-semibold [&>h3]:text-ink-900 [&>p]:mb-3 [&>p]:leading-relaxed [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5"
             />
 
             {selectionMenu && onCreateSelectionComment && !readOnly ? (
@@ -455,6 +524,30 @@ export function DocumentEditorCanvas({
           </div>
         </div>
       </div>
+
+      {/* Real-Time Collaborator Activity Toasts */}
+      {notifications.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+          {notifications.map((notif) => (
+            <div
+              key={notif.id}
+              className="pointer-events-auto flex items-center gap-2 rounded-xl border border-ink-100 bg-white/95 px-4 py-2.5 text-xs font-semibold text-ink-900 shadow-xl backdrop-blur transition"
+            >
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{notif.message}</span>
+              {onDismissNotification && (
+                <button
+                  type="button"
+                  onClick={() => onDismissNotification(notif.id)}
+                  className="ml-2 text-ink-400 hover:text-ink-700"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

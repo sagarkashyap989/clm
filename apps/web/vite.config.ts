@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
+import { Server as SocketIOServer } from 'socket.io';
 
 function mockApiPlugin(): Plugin {
   let currentUser: { id: string; email: string; name: string; emailVerified: boolean } | null = {
@@ -442,9 +443,146 @@ function mockApiPlugin(): Plugin {
     },
   ];
 
+  const COLOR_PALETTE = ['#059669', '#4f46e5', '#7c3aed', '#d97706', '#e11d48', '#0891b2', '#c026d3', '#2563eb'];
+  function getColor(id: string) {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) hash = (hash << 5) - hash + id.charCodeAt(i);
+    return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length] || '#4f46e5';
+  }
+
+  const activeRooms = new Map<string, {
+    content: string;
+    revision: number;
+    sockets: Map<string, any>;
+  }>();
+
+  let socketIoServer: SocketIOServer | null = null;
+
   return {
     name: 'mock-api-plugin',
     configureServer(server) {
+      if (server.httpServer && !socketIoServer) {
+        socketIoServer = new SocketIOServer(server.httpServer, {
+          path: '/socket.io/',
+          cors: { origin: '*', credentials: true },
+          transports: ['websocket', 'polling'],
+        });
+
+        socketIoServer.on('connection', (socket) => {
+          const authUser = socket.handshake.auth?.user || currentUser || {
+            id: 'usr_demo',
+            name: 'Administrator',
+            email: 'admin@example.com',
+            role: 'admin',
+          };
+          const contractId = (socket.handshake.query?.contractId as string) || (socket.handshake.auth?.contractId as string) || 'ctr_1';
+          const roomKey = `contract:${contractId}`;
+
+          let room = activeRooms.get(contractId);
+          if (!room) {
+            const initialContent = contractDrafts[contractId] || contractVersions[contractId]?.[0]?.editorContent || `<h2>CONTRACT DOCUMENT</h2><p>This Agreement is executed between Acme Contracts Corp and Counterparty.</p>`;
+            room = {
+              content: initialContent,
+              revision: 0,
+              sockets: new Map(),
+            };
+            activeRooms.set(contractId, room);
+          }
+
+          const userColor = authUser.color || getColor(authUser.id);
+          const presence = {
+            socketId: socket.id,
+            user: {
+              id: authUser.id,
+              name: authUser.name,
+              email: authUser.email,
+              role: authUser.role || 'editor',
+              color: userColor,
+            },
+            cursor: null,
+            selection: null,
+            lastActiveAt: Date.now(),
+            isEditing: false,
+          };
+
+          room.sockets.set(socket.id, presence);
+          socket.join(roomKey);
+
+          socket.emit('doc:sync_init', {
+            contractId,
+            content: room.content,
+            revision: room.revision,
+            activeUsers: Array.from(room.sockets.values()),
+          });
+
+          socket.to(roomKey).emit('presence:join', presence);
+          socketIoServer!.to(roomKey).emit('presence:update', Array.from(room.sockets.values()));
+
+          socket.on('doc:edit', (payload: { content: string }) => {
+            if (authUser.role === 'viewer') {
+              socket.emit('error', { code: 'FORBIDDEN', message: 'Viewer cannot edit document' });
+              return;
+            }
+            room!.revision += 1;
+            room!.content = payload.content;
+            contractDrafts[contractId] = payload.content;
+
+            socket.to(roomKey).emit('doc:patch', {
+              id: `patch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              revision: room!.revision,
+              authorId: authUser.id,
+              authorName: authUser.name,
+              content: room!.content,
+              timestamp: Date.now(),
+            });
+          });
+
+          socket.on('awareness:cursor', (cursor: any) => {
+            presence.cursor = cursor;
+            presence.lastActiveAt = Date.now();
+            socket.to(roomKey).emit('awareness:cursor', {
+              socketId: socket.id,
+              cursor,
+            });
+          });
+
+          socket.on('awareness:selection', (selection: any) => {
+            presence.selection = selection;
+            presence.lastActiveAt = Date.now();
+            socket.to(roomKey).emit('awareness:selection', {
+              socketId: socket.id,
+              selection,
+            });
+          });
+
+          socket.on('doc:restore', (payload: { versionNumber: number; content: string }) => {
+            if (authUser.role === 'viewer') return;
+            room!.revision += 1;
+            room!.content = payload.content;
+            contractDrafts[contractId] = payload.content;
+
+            socketIoServer!.to(roomKey).emit('doc:version_restored', {
+              versionNumber: payload.versionNumber,
+              restoredBy: {
+                id: authUser.id,
+                name: authUser.name,
+              },
+              content: room!.content,
+              timestamp: Date.now(),
+            });
+          });
+
+          socket.on('disconnect', () => {
+            room!.sockets.delete(socket.id);
+            socket.to(roomKey).emit('presence:leave', {
+              userId: authUser.id,
+              userName: authUser.name,
+            });
+            socketIoServer!.to(roomKey).emit('presence:update', Array.from(room!.sockets.values()));
+          });
+        });
+      }
+
       server.middlewares.use((req, res, next) => {
         if (!req.url?.startsWith('/api/')) {
           return next();
@@ -724,6 +862,19 @@ function mockApiPlugin(): Plugin {
             contract.currentVersionNumber = nextNum;
             contract.updatedAt = new Date().toISOString();
             delete contractDrafts[contractId];
+            const room = activeRooms.get(contractId);
+            if (room && targetVersion.editorContent) {
+              room.revision += 1;
+              room.content = targetVersion.editorContent;
+              if (socketIoServer) {
+                socketIoServer.to(`contract:${contractId}`).emit('doc:version_restored', {
+                  versionNumber: nextNum,
+                  restoredBy: currentUser,
+                  content: targetVersion.editorContent,
+                  timestamp: Date.now(),
+                });
+              }
+            }
 
             res.statusCode = 201;
             return res.end(JSON.stringify({ data: { version: restoredVersion } }));
@@ -999,6 +1150,10 @@ function mockApiPlugin(): Plugin {
           const contractId = url.split('/api/v1/contracts/')[1].split('/draft')[0];
           readBody((body) => {
             contractDrafts[contractId] = body.editorContent || '';
+            const room = activeRooms.get(contractId);
+            if (room && body.editorContent) {
+              room.content = body.editorContent;
+            }
             return res.end(JSON.stringify({ data: { savedAt: new Date().toISOString() } }));
           });
           return;

@@ -384,3 +384,61 @@ export type ApiErrorBody = {
 export type ApiSuccess<T> = {
   data: T;
 };
+
+export type CollaboratorUser = {
+  id: string;
+  name: string;
+  email: string;
+  role?: string;
+  color: string;
+};
+
+export type CursorPosition = {
+  characterOffset?: number;
+  paragraphIndex?: number;
+  xRatio?: number;
+  yRatio?: number;
+};
+
+export type SelectionRange = {
+  quoteText?: string;
+  startOffset?: number;
+  endOffset?: number;
+};
+
+export type CollaboratorPresence = {
+  socketId: string;
+  user: CollaboratorUser;
+  cursor?: CursorPosition | null;
+  selection?: SelectionRange | null;
+  lastActiveAt: number;
+  isEditing?: boolean;
+};
+
+export type DocumentPatch = {
+  id: string;
+  revision: number;
+  authorId: string;
+  authorName: string;
+  content: string;
+  timestamp: number;
+};
+
+export type RoomSyncPayload = {
+  contractId: string;
+  content: string;
+  revision: number;
+  versionNumber?: number;
+  activeUsers: CollaboratorPresence[];
+};
+
+export type VersionRestoreBroadcast = {
+  versionNumber: number;
+  restoredBy: {
+    id: string;
+    name: string;
+  };
+  content: string;
+  timestamp: number;
+};
+

@@ -19,14 +19,44 @@ import { VersionCompareModal } from '../editor/VersionCompareModal';
 import { ShareContractModal } from '../collaboration/ShareContractModal';
 import { ContractCommentsPanel } from '../collaboration/ContractCommentsPanel';
 import { ContractChatPanel } from '../collaboration/ContractChatPanel';
-import type { ContractComment, ContractChatMessage } from '@cml/shared';
+import {
+  CollaborationProvider,
+  useCollaboration,
+} from '../editor/collaboration/CollaborationProvider';
+import { CollaborationStatus } from '../editor/collaboration/CollaborationStatus';
+import { PresenceAvatars } from '../editor/collaboration/PresenceAvatars';
+import { PersonaSwitcher } from '../editor/collaboration/PersonaSwitcher';
+import { useAuthStore } from '@/stores/auth';
+import type {
+  ContractComment,
+  ContractChatMessage,
+  DocumentPatch,
+  VersionRestoreBroadcast,
+  RoomSyncPayload,
+} from '@cml/shared';
 
 type TabType = 'workspace' | 'comments' | 'chat' | 'versions' | 'details';
 
-export function ContractDetailPage() {
-  const { contractId } = useParams<{ contractId: string }>();
+function ContractDetailContent({ contractId }: { contractId: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const { user } = useAuthStore();
+  const {
+    status: collabStatus,
+    activeUsers,
+    canEdit: collabCanEdit,
+    sendEdit,
+    sendCursor,
+    sendSelection,
+    restoreVersion: broadcastVersionRestore,
+    notifications,
+    dismissNotification,
+    setOnRemotePatch,
+    setOnVersionRestored,
+    setOnInitialSync,
+    retryConnection,
+  } = useCollaboration();
 
   const [activeTab, setActiveTab] = useState<TabType>('workspace');
   const [editorContent, setEditorContent] = useState<string>('');
@@ -53,6 +83,35 @@ export function ContractDetailPage() {
 
   // Autosave timer ref
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Collaboration Event Listeners (Remote Edits, Restorations, Catch-Up)
+  useEffect(() => {
+    setOnRemotePatch((patch: DocumentPatch) => {
+      setEditorContent(patch.content);
+      setAutosaveStatus('saved');
+    });
+
+    setOnVersionRestored((broadcast: VersionRestoreBroadcast) => {
+      setEditorContent(broadcast.content);
+      setAutosaveStatus('saved');
+      queryClient.invalidateQueries({ queryKey: ['contract-versions', contractId] });
+      queryClient.invalidateQueries({ queryKey: ['contract', contractId] });
+      setActiveTab('workspace');
+    });
+
+    setOnInitialSync((payload: RoomSyncPayload) => {
+      if (payload.content) {
+        setEditorContent(payload.content);
+        setAutosaveStatus('saved');
+      }
+    });
+
+    return () => {
+      setOnRemotePatch(null);
+      setOnVersionRestored(null);
+      setOnInitialSync(null);
+    };
+  }, [setOnRemotePatch, setOnVersionRestored, setOnInitialSync, queryClient, contractId]);
 
   // 1. Fetch Contract Data
   const {
@@ -148,10 +207,13 @@ export function ContractDetailPage() {
     },
   });
 
-  // Handle Editor Content Change with Debounced Autosave
+  // Handle Editor Content Change with Debounced Autosave & Live Broadcast
   function handleContentChange(newHtml: string) {
     setEditorContent(newHtml);
     setAutosaveStatus('unsaved');
+
+    // Broadcast edit immediately to room peers
+    sendEdit(newHtml);
 
     if (autosaveTimeoutRef.current) {
       clearTimeout(autosaveTimeoutRef.current);
@@ -225,7 +287,11 @@ export function ContractDetailPage() {
         }),
       });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      const restored = versions.find((v) => v.id === variables.versionId);
+      if (restored?.editorContent) {
+        broadcastVersionRestore(variables.versionNumber, restored.editorContent);
+      }
       queryClient.invalidateQueries({ queryKey: ['contract-versions', contractId] });
       queryClient.invalidateQueries({ queryKey: ['contract', contractId] });
       setActiveTab('workspace');
@@ -321,6 +387,22 @@ export function ContractDetailPage() {
           >
             Save New Version (v{currentVersionNumber + 1}.0)
           </button>
+        </div>
+      </div>
+
+      {/* Real-Time Multi-User Collaboration & Presence Strip */}
+      <div
+        id="realtime-collaboration-strip"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink-100 bg-white px-5 py-3 shadow-xs"
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <CollaborationStatus status={collabStatus} onRetry={retryConnection} />
+          <div className="hidden sm:block h-4 w-px bg-ink-200" />
+          <PresenceAvatars users={activeUsers} currentUserId={user?.id} />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <PersonaSwitcher />
         </div>
       </div>
 
@@ -649,12 +731,19 @@ export function ContractDetailPage() {
               onTriggerSaveVersion={() => setIsSaveModalOpen(true)}
               autosaveStatus={autosaveStatus}
               lastSavedAt={lastSavedAt}
+              readOnly={!collabCanEdit}
               quotedPassages={(commentsData?.comments ?? []).map((comment) => ({
                 id: comment.id,
                 quoteText: comment.quoteText ?? '',
                 isResolved: comment.isResolved,
               }))}
               activeQuoteId={activeQuoteId}
+              activeUsers={activeUsers}
+              currentUserId={user?.id}
+              onBroadcastCursor={sendCursor}
+              onBroadcastSelection={sendSelection}
+              notifications={notifications}
+              onDismissNotification={dismissNotification}
               onCreateSelectionComment={async ({ quoteText, content }) => {
                 await api(`/api/v1/contracts/${contract.id}/comments`, {
                   method: 'POST',
@@ -909,3 +998,18 @@ export function ContractDetailPage() {
     </div>
   );
 }
+
+export function ContractDetailPage() {
+  const { contractId } = useParams<{ contractId: string }>();
+
+  if (!contractId) {
+    return null;
+  }
+
+  return (
+    <CollaborationProvider contractId={contractId}>
+      <ContractDetailContent contractId={contractId} />
+    </CollaborationProvider>
+  );
+}
+

@@ -18,7 +18,11 @@ async function main() {
     console.warn('File storage not ready', error);
   }
   const app = createApp();
-  app.listen(config.port, '0.0.0.0', () => {
+  const httpServer = (await import('node:http')).createServer(app);
+  const { initCollaborationServer } = await import('./collaboration/collaboration.server.js');
+  initCollaborationServer(httpServer);
+
+  httpServer.listen(config.port, '0.0.0.0', () => {
     console.log(`API listening on http://0.0.0.0:${config.port}`);
   });
 }
