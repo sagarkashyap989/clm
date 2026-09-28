@@ -1,9 +1,11 @@
 import type { Socket } from 'socket.io';
+import mongoose from 'mongoose';
 import { ACCESS_COOKIE } from '../utils/cookies.js';
 import { verifyAccessToken } from '../utils/tokens.js';
 import { User } from '../models/User.js';
 import { Membership } from '../models/Membership.js';
 import { Contract } from '../models/Contract.js';
+import { getDeterministicColor } from './collaboration.presence.js';
 import type { CollaborationSocketSession } from './collaboration.types.js';
 
 function parseCookie(cookieString: string | undefined, name: string): string | undefined {
@@ -27,59 +29,92 @@ export async function authenticateCollaborationSocket(
     throw new Error('MISSING_CONTRACT_ID');
   }
 
-  // 1. Try real JWT verification if token is present
+  // 1. Resolve Contract canonical organization from database if contractId is valid ObjectId
+  let contractDoc: any = null;
+  if (mongoose.isValidObjectId(contractId)) {
+    try {
+      contractDoc = await Contract.findOne({ _id: contractId, deletedAt: null }).lean();
+    } catch {
+      // Contract query error or not found in MongoDB
+    }
+  }
+
+  const contractOrgId = contractDoc ? contractDoc.organizationId.toString() : null;
+
+  // 2. Real JWT token verification
   if (token) {
     try {
       const payload = verifyAccessToken(token);
-      const userDoc = await User.findById(payload.sub);
+      const userDoc = await User.findById(payload.sub).lean();
       if (userDoc) {
-        const membership = await Membership.findOne({
-          userId: userDoc._id,
-          status: 'active',
-        });
+        // Query for membership matching the contract's organization FIRST
+        let membership: any = null;
+        if (contractOrgId) {
+          membership = await Membership.findOne({
+            userId: userDoc._id,
+            organizationId: contractOrgId,
+            status: { $in: ['active', 'invited'] },
+          }).lean();
+        }
 
-        if (membership) {
-          // Check contract exists and matches organization
-          let canEdit = membership.role === 'admin' || membership.role === 'manager';
-          try {
-            const contractDoc = await Contract.findById(contractId);
-            if (contractDoc) {
-              if (contractDoc.organizationId.toString() !== membership.organizationId.toString()) {
-                throw new Error('ORGANIZATION_FORBIDDEN');
-              }
-              // If member is owner, or role is admin/manager, they can edit
-              if (contractDoc.ownerId.toString() === userDoc._id.toString()) {
-                canEdit = true;
-              }
-            }
-          } catch {
-            // Mongoose query error or contract not found
-          }
+        // If not found in contract org, check if user has active membership matching handshake organizationId
+        const clientOrgId = socket.handshake.auth?.organizationId;
+        if (!membership && clientOrgId && mongoose.isValidObjectId(clientOrgId)) {
+          membership = await Membership.findOne({
+            userId: userDoc._id,
+            organizationId: clientOrgId,
+            status: { $in: ['active', 'invited'] },
+          }).lean();
+        }
+
+        // Fallback to any active membership of this user
+        if (!membership) {
+          membership = await Membership.findOne({
+            userId: userDoc._id,
+            status: { $in: ['active', 'invited'] },
+          }).lean();
+        }
+
+        const isOwner = Boolean(
+          contractDoc && contractDoc.ownerId?.toString() === userDoc._id.toString(),
+        );
+        const isCreator = Boolean(
+          contractDoc && contractDoc.createdBy?.toString() === userDoc._id.toString(),
+        );
+
+        if (membership || isOwner || isCreator) {
+          // Canonical organization is ALWAYS the contract's organization if contract exists in DB!
+          const effectiveOrgId =
+            contractOrgId || membership?.organizationId?.toString() || 'org_default';
+
+          const role = membership?.role || (isOwner ? 'admin' : 'member');
+          const canEdit = isOwner || isCreator || role !== 'viewer';
 
           return {
             user: {
               id: userDoc._id.toString(),
               name: userDoc.name,
               email: userDoc.email,
-              role: membership.role,
-              color: '#4f46e5',
+              role,
+              color: getDeterministicColor(userDoc._id.toString()),
             },
-            organizationId: membership.organizationId.toString(),
+            organizationId: effectiveOrgId,
             contractId,
             canEdit,
           };
         }
       }
     } catch (err: any) {
-      if (err.message === 'ORGANIZATION_FORBIDDEN') {
-        throw err;
-      }
+      console.warn('[Collaboration Auth] JWT token check:', err?.message || err);
     }
   }
 
-  // 2. Fallback / Dev Handshake Authenticator (supports dev personas e.g. Admin, Sarah Connor, John Doe)
+  // 3. Fallback / Dev Handshake Authenticator (supports dev personas and mock mode)
   const clientUser = socket.handshake.auth?.user;
-  const clientOrgId = socket.handshake.auth?.organizationId || 'org_demo';
+  const effectiveOrgId =
+    contractOrgId ||
+    socket.handshake.auth?.organizationId ||
+    'org_demo';
 
   if (clientUser && clientUser.id && clientUser.name) {
     return {
@@ -87,16 +122,15 @@ export async function authenticateCollaborationSocket(
         id: String(clientUser.id),
         name: String(clientUser.name),
         email: String(clientUser.email || `${clientUser.id}@example.com`),
-        role: clientUser.role || 'admin',
-        color: clientUser.color || '#059669',
+        role: clientUser.role || 'member',
+        color: clientUser.color || getDeterministicColor(String(clientUser.id)),
       },
-      organizationId: clientOrgId,
+      organizationId: effectiveOrgId,
       contractId,
       canEdit: clientUser.role !== 'viewer',
     };
   }
 
-  // Default fallback user for unauthenticated requests
   return {
     user: {
       id: 'usr_demo',
@@ -105,7 +139,7 @@ export async function authenticateCollaborationSocket(
       role: 'admin',
       color: '#059669',
     },
-    organizationId: clientOrgId,
+    organizationId: effectiveOrgId,
     contractId,
     canEdit: true,
   };

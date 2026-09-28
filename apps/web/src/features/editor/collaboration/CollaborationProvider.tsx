@@ -187,6 +187,21 @@ export const CollaborationProvider: FC<CollaborationProviderProps> = ({
       setErrorMessage(null);
     });
 
+    socket.on('error', (err: any) => {
+      console.warn('[Collaboration Server Error]', err?.message || err);
+      const msg = err?.message || 'Collaboration error';
+      setErrorMessage(msg);
+      if (
+        msg.includes('FORBIDDEN') ||
+        msg.includes('MISMATCH') ||
+        msg.includes('AUTHENTICATION') ||
+        err?.code === 'JOIN_ERROR'
+      ) {
+        setStatus('disconnected');
+        socket.disconnect();
+      }
+    });
+
     socket.on('doc:sync_init', (payload: RoomSyncPayload) => {
       setLatestRevision(payload.revision);
       setActiveUsers(payload.activeUsers || []);
