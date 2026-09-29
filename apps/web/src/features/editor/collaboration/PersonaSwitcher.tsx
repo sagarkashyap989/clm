@@ -7,21 +7,28 @@ const DEMO_PERSONAS = [
     name: 'Administrator',
     email: 'admin@example.com',
     role: 'admin',
-    color: '#059669', // Emerald
+    color: '#2563eb', // Royal Blue
   },
   {
     id: 'usr_2',
-    name: 'Sarah Connor',
-    email: 'sarah@example.com',
-    role: 'manager',
-    color: '#4f46e5', // Indigo
+    name: 'Sakshi Soni',
+    email: 'sakshi@example.com',
+    role: 'legal_counsel',
+    color: '#ef4444', // Red / Coral
+  },
+  {
+    id: 'usr_dsk',
+    name: 'DSK Legal',
+    email: 'dsk@example.com',
+    role: 'external_counsel',
+    color: '#9333ea', // Purple
   },
   {
     id: 'usr_3',
     name: 'John Doe',
     email: 'john@example.com',
     role: 'member',
-    color: '#d97706', // Amber
+    color: '#10b981', // Emerald
   },
   {
     id: 'usr_viewer',

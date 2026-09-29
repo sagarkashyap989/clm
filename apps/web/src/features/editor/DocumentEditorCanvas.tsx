@@ -3,16 +3,12 @@ import {
   useRef,
   useEffect,
   type KeyboardEvent,
+  type ClipboardEvent,
   useCallback,
   useMemo,
 } from 'react';
 import { DocumentEditorToolbar } from './DocumentEditorToolbar';
-import {
-  applyQuoteHighlights,
-  clearQuoteHighlights,
-  rangeForQuote,
-  type QuotedPassage,
-} from './quoteHighlight';
+import { rangeForQuote, type QuotedPassage } from './quoteHighlight';
 import { CollaboratorCursors } from './collaboration/CollaboratorCursors';
 import { DocumentReviewMargin } from './DocumentReviewMargin';
 import type {
@@ -23,6 +19,31 @@ import type {
   TrackedChange,
   TrackedChangeType,
 } from '@cml/shared';
+
+export function getUserColor(userId?: string): string {
+  if (!userId) return '#2563eb';
+  if (userId === 'usr_demo' || userId === 'usr_admin') return '#2563eb'; // Royal Blue
+  if (userId === 'usr_2' || userId.includes('sakshi')) return '#ef4444'; // Red
+  if (userId === 'usr_dsk' || userId.includes('dsk')) return '#9333ea'; // Purple
+  if (userId === 'usr_3' || userId.includes('john')) return '#10b981'; // Emerald
+  if (userId === 'usr_viewer') return '#f59e0b'; // Amber
+
+  const PALETTE = [
+    '#2563eb',
+    '#ef4444',
+    '#9333ea',
+    '#10b981',
+    '#f59e0b',
+    '#06b6d4',
+    '#ec4899',
+    '#8b5cf6',
+  ];
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
+  }
+  return PALETTE[hash % PALETTE.length];
+}
 
 type DocumentEditorCanvasProps = {
   initialContent: string;
@@ -53,7 +74,7 @@ type DocumentEditorCanvasProps = {
   onOpenVersionHistory?: () => void;
 };
 
-// Helper: parse all tracked changes from DOM
+// Feat 1: Parse all tracked changes and format items with distinct user colors
 function parseTrackedChangesFromDom(root: HTMLElement): TrackedChange[] {
   const elements = root.querySelectorAll<HTMLElement>('.cml-change-item');
   const changes: TrackedChange[] = [];
@@ -69,15 +90,39 @@ function parseTrackedChangesFromDom(root: HTMLElement): TrackedChange[] {
       type = 'format';
     }
 
+    const authorId =
+      el.dataset.authorId ||
+      (el.dataset.authorName === 'DSK Legal'
+        ? 'usr_dsk'
+        : el.dataset.authorName === 'Sakshi Soni'
+        ? 'usr_2'
+        : 'usr_demo');
+
+    const authorName =
+      el.dataset.authorName ||
+      (authorId === 'usr_dsk'
+        ? 'DSK Legal'
+        : authorId === 'usr_2'
+        ? 'Sakshi Soni'
+        : 'Administrator');
+
+    const authorColor = el.dataset.authorColor || getUserColor(authorId);
+
+    // Apply inline style so each user's edits visually appear in their unique color
+    if (!el.style.color || el.style.color === '') {
+      el.style.color = authorColor;
+    }
+    el.style.textDecorationColor = authorColor;
+
     changes.push({
       id,
       type,
       text: el.innerText || el.textContent || '',
       formatDetail: el.dataset.formatDetail || (type === 'format' ? 'Font: Bold' : undefined),
       author: {
-        id: el.dataset.authorId || 'usr_dsk',
-        name: el.dataset.authorName || 'DSK Legal',
-        color: el.dataset.authorColor || '#ef4444',
+        id: authorId,
+        name: authorName,
+        color: authorColor,
       },
       timestamp: el.dataset.timestamp || new Date().toISOString(),
       status: 'pending',
@@ -95,7 +140,6 @@ export function DocumentEditorCanvas({
   lastSavedAt,
   readOnly = false,
   comments = [],
-  quotedPassages = [],
   activeQuoteId = null,
   onSelectQuoteId,
   onCreateSelectionComment,
@@ -104,18 +148,22 @@ export function DocumentEditorCanvas({
   onDeleteComment,
   activeUsers = [],
   currentUserId = 'usr_demo',
-  currentUserName = 'DSK Legal',
-  currentUserColor = '#ef4444',
+  currentUserName = 'Administrator',
+  currentUserColor: propUserColor,
   onBroadcastCursor,
   onBroadcastSelection,
   notifications = [],
   onDismissNotification,
   onOpenVersionHistory,
 }: DocumentEditorCanvasProps) {
+  const currentUserColor = propUserColor || getUserColor(currentUserId);
+
   const editorRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const badgeContainerRef = useRef<HTMLDivElement>(null);
 
-  // Theme: Dark mode matching screenshot by default, with toggle option
+  // Theme: Dark mode matching screenshot by default
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
   // Mode: editing, suggesting (track changes), viewing
@@ -138,6 +186,11 @@ export function DocumentEditorCanvas({
   const [trackedChanges, setTrackedChanges] = useState<TrackedChange[]>([]);
   const [activeChangeId, setActiveChangeId] = useState<string | null>(null);
 
+  // Issue 1: Positions for aligning Markup badges next to the formatted text
+  const [changePositions, setChangePositions] = useState<Record<string, number>>({});
+  // Feat 2: Positions for comment icons in the right margin of the document
+  const [commentPositions, setCommentPositions] = useState<Record<string, number>>({});
+
   // Pending comment from selection
   const [pendingQuoteText, setPendingQuoteText] = useState<string | null>(null);
 
@@ -154,6 +207,102 @@ export function DocumentEditorCanvas({
     const parsedChanges = parseTrackedChangesFromDom(editorRef.current);
     setTrackedChanges(parsedChanges);
   }, []);
+
+  // Issue 1: Compute vertical coordinates so detail badges sit directly next to formatted text
+  const recalculatePositions = useCallback(() => {
+    if (!editorRef.current) return;
+    const editorRect = editorRef.current.getBoundingClientRect();
+    const scale = zoomLevel / 100;
+
+    // 1. Changes positions for Markup & Formatting
+    const changeElements = editorRef.current.querySelectorAll<HTMLElement>('.cml-change-item');
+    const newChangePos: Record<string, number> = {};
+
+    const badgeContainer = badgeContainerRef.current;
+    if (badgeContainer) {
+      const badgeContainerRect = badgeContainer.getBoundingClientRect();
+      const currentBadgeScroll = badgeContainer.scrollTop;
+      changeElements.forEach((el) => {
+        const id = el.dataset.changeId;
+        if (id) {
+          const elRect = el.getBoundingClientRect();
+          // elRect.top - badgeContainerRect.top + currentBadgeScroll matches the exact horizontal row
+          const top = elRect.top - badgeContainerRect.top + currentBadgeScroll;
+          newChangePos[id] = Math.max(8, top);
+        }
+      });
+    } else {
+      // Fallback relative to editor top
+      changeElements.forEach((el) => {
+        const id = el.dataset.changeId;
+        if (id) {
+          const elRect = el.getBoundingClientRect();
+          const top = (elRect.top - editorRect.top) / scale + 105;
+          newChangePos[id] = Math.max(8, top);
+        }
+      });
+    }
+    setChangePositions(newChangePos);
+
+    // 2. Feat 2: Comment icon positions (sitting in the right margin next to commented text)
+    const newCommentPos: Record<string, number> = {};
+    comments.forEach((c) => {
+      if (!c.quoteText) return;
+      const range = rangeForQuote(editorRef.current!, c.quoteText);
+      if (range) {
+        const rects = range.getClientRects();
+        const rect = rects.length > 0 ? rects[0] : range.getBoundingClientRect();
+        if (rect && rect.top > 0) {
+          const top = (rect.top - editorRect.top) / scale;
+          newCommentPos[c.id] = Math.max(0, top);
+        }
+      }
+    });
+    setCommentPositions(newCommentPos);
+  }, [comments, zoomLevel]);
+
+  // Recalculate positions after DOM updates or window resizes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      recalculatePositions();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [initialContent, trackedChanges.length, comments, recalculatePositions]);
+
+  useEffect(() => {
+    window.addEventListener('resize', recalculatePositions);
+    return () => window.removeEventListener('resize', recalculatePositions);
+  }, [recalculatePositions]);
+
+  // Synchronize scrolling between Document Canvas and Markup & Formatting column
+  const handleCanvasScroll = useCallback(() => {
+    if (badgeContainerRef.current && canvasContainerRef.current) {
+      badgeContainerRef.current.scrollTop = canvasContainerRef.current.scrollTop;
+    }
+  }, []);
+
+  const handleBadgeScroll = useCallback(() => {
+    if (badgeContainerRef.current && canvasContainerRef.current) {
+      canvasContainerRef.current.scrollTop = badgeContainerRef.current.scrollTop;
+    }
+  }, []);
+
+  // Feat 2: Stagger comment icons so multiple comments on the same/adjacent lines do not overlap
+  const resolvedCommentPositions = useMemo(() => {
+    const sorted = [...comments].sort(
+      (a, b) => (commentPositions[a.id] ?? 0) - (commentPositions[b.id] ?? 0),
+    );
+    let lastY = 0;
+    const posMap: Record<string, number> = {};
+    sorted.forEach((c) => {
+      const rawY = commentPositions[c.id];
+      if (typeof rawY !== 'number') return;
+      const finalY = Math.max(rawY, lastY);
+      posMap[c.id] = finalY;
+      lastY = finalY + 28; // clearance for 24px icon
+    });
+    return posMap;
+  }, [comments, commentPositions]);
 
   // Initialize or update editor content from remote/initial
   useEffect(() => {
@@ -186,7 +335,7 @@ export function DocumentEditorCanvas({
             sel.removeAllRanges();
             sel.addRange(savedRange);
           } catch {
-            // Ignore if DOM elements restructured
+            // Ignore DOM restructuring
           }
         }
       }
@@ -256,8 +405,18 @@ export function DocumentEditorCanvas({
       unscaledX,
       unscaledY,
       caretHeight,
-      xRatio: editorRect.width > 0 ? (clientRect ? (clientRect.left - editorRect.left) / editorRect.width : 0) : 0,
-      yRatio: editorRect.height > 0 ? (clientRect ? (clientRect.top - editorRect.top) / editorRect.height : 0) : 0,
+      xRatio:
+        editorRect.width > 0
+          ? clientRect
+            ? (clientRect.left - editorRect.left) / editorRect.width
+            : 0
+          : 0,
+      yRatio:
+        editorRect.height > 0
+          ? clientRect
+            ? (clientRect.top - editorRect.top) / editorRect.height
+            : 0
+          : 0,
     });
 
     if (!selection.isCollapsed) {
@@ -268,41 +427,102 @@ export function DocumentEditorCanvas({
     }
   }, [onBroadcastCursor, onBroadcastSelection, zoomLevel]);
 
-  // Apply quote highlights
-  const effectivePassages = useMemo(() => {
-    if (quotedPassages.length > 0) return quotedPassages;
-    return comments.map((c) => ({
-      id: c.id,
-      quoteText: c.quoteText || '',
-      isResolved: c.isResolved,
-    }));
-  }, [quotedPassages, comments]);
-
-  useEffect(() => {
-    if (!editorRef.current) return;
-    applyQuoteHighlights(editorRef.current, effectivePassages, activeQuoteId);
-    return () => clearQuoteHighlights();
-  }, [effectivePassages, activeQuoteId, initialContent]);
-
   // Trigger input change
   function handleInput() {
     if (!editorRef.current) return;
     calculateMetricsAndChanges();
     onContentChange(editorRef.current.innerHTML);
     broadcastLocalCursor();
-    applyQuoteHighlights(editorRef.current, effectivePassages, activeQuoteId);
+    recalculatePositions();
   }
 
-  // Handle Track Changes: Insertions
-  function insertTrackedText(text: string) {
-    if (!editorRef.current) return;
+  // Feat 1: Different user editing text gets that user's distinct color
+  function handleBeforeInput(e: any) {
+    if (readOnly || trackChangesMode === 'viewing') return;
+
+    if (e.inputType === 'insertText' && e.data) {
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return;
+
+      const node = sel.anchorNode;
+      const parent = node instanceof HTMLElement ? node : node?.parentElement;
+      const existingAuthorSpan = parent?.closest<HTMLElement>('.cml-change-item');
+
+      // If the cursor is already inside the current user's editing span (and not a deleted span):
+      // allow native browser insertion so consecutive typing flows naturally with zero keystroke fragmentation!
+      if (
+        existingAuthorSpan &&
+        existingAuthorSpan.dataset.authorId === currentUserId &&
+        !existingAuthorSpan.classList.contains('cml-change-delete')
+      ) {
+        return; // native insert inside author's colored span
+      }
+
+      // Otherwise, create a clean author span for the current user and insert the character
+      e.preventDefault();
+      const changeId = `chg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const span = document.createElement('span');
+      span.className = 'cml-change-item cml-change-insert';
+      span.dataset.changeId = changeId;
+      span.dataset.authorId = currentUserId;
+      span.dataset.authorName = currentUserName;
+      span.dataset.authorColor = currentUserColor;
+      span.dataset.timestamp = new Date().toISOString();
+      span.style.color = currentUserColor;
+      span.style.textDecoration = trackChangesMode === 'suggesting' ? 'underline' : 'none';
+      span.style.textDecorationColor = currentUserColor;
+
+      const textNode = document.createTextNode(e.data);
+      span.appendChild(textNode);
+
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(span);
+
+      // Place caret right after the inserted character inside the span
+      range.setStartAfter(textNode);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      handleInput();
+    }
+  }
+
+  // Feat 1: Paste handler with distinct user color
+  function handlePaste(e: ClipboardEvent<HTMLDivElement>) {
+    if (readOnly || trackChangesMode === 'viewing') return;
+    const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
+
+    e.preventDefault();
     const changeId = `chg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const spanHtml = `<span class="cml-change-item cml-change-insert" data-change-id="${changeId}" data-author-id="${currentUserId}" data-author-name="${currentUserName}" data-author-color="${currentUserColor}" data-timestamp="${new Date().toISOString()}">${text}</span>`;
-    document.execCommand('insertHTML', false, spanHtml);
+    const span = document.createElement('span');
+    span.className = 'cml-change-item cml-change-insert';
+    span.dataset.changeId = changeId;
+    span.dataset.authorId = currentUserId;
+    span.dataset.authorName = currentUserName;
+    span.dataset.authorColor = currentUserColor;
+    span.dataset.timestamp = new Date().toISOString();
+    span.style.color = currentUserColor;
+    span.style.textDecoration = trackChangesMode === 'suggesting' ? 'underline' : 'none';
+    span.style.textDecorationColor = currentUserColor;
+    span.textContent = text;
+
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(span);
+      range.setStartAfter(span);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
     handleInput();
   }
 
-  // Handle Track Changes: Deletions
+  // Feat 1: Delete in suggesting mode with distinct user color
   function deleteTrackedText() {
     if (!editorRef.current) return false;
     const selection = window.getSelection();
@@ -312,14 +532,14 @@ export function DocumentEditorCanvas({
     if (!selectedText.trim()) return false;
 
     const changeId = `chg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const spanHtml = `<span class="cml-change-item cml-change-delete" data-change-id="${changeId}" data-author-id="${currentUserId}" data-author-name="${currentUserName}" data-author-color="${currentUserColor}" data-timestamp="${new Date().toISOString()}">${selectedText}</span>`;
+    const spanHtml = `<span class="cml-change-item cml-change-delete" data-change-id="${changeId}" data-author-id="${currentUserId}" data-author-name="${currentUserName}" data-author-color="${currentUserColor}" style="color: ${currentUserColor}; text-decoration: line-through; text-decoration-color: ${currentUserColor};">${selectedText}</span>`;
 
     document.execCommand('insertHTML', false, spanHtml);
     handleInput();
     return true;
   }
 
-  // Handle formatting command with track changes support
+  // Feat 1: Formatting command with distinct user color
   function handleCommand(command: string, value?: string) {
     if (readOnly || trackChangesMode === 'viewing') return;
     if (editorRef.current) {
@@ -350,7 +570,7 @@ export function DocumentEditorCanvas({
           formatDetail = value ? `Heading ${value.replace(/[<>/]/g, '')}` : 'Heading';
         }
 
-        const spanHtml = `<span class="cml-change-item cml-change-format" data-change-id="${changeId}" data-format="${command}" data-format-detail="${formatDetail}" data-author-id="${currentUserId}" data-author-name="${currentUserName}" data-author-color="${currentUserColor}" data-timestamp="${new Date().toISOString()}" style="${styleAttr}">${selectedText}</span>`;
+        const spanHtml = `<span class="cml-change-item cml-change-format" data-change-id="${changeId}" data-format="${command}" data-format-detail="${formatDetail}" data-author-id="${currentUserId}" data-author-name="${currentUserName}" data-author-color="${currentUserColor}" style="color: ${currentUserColor}; text-decoration: underline; text-decoration-color: ${currentUserColor}; ${styleAttr}">${selectedText}</span>`;
         document.execCommand('insertHTML', false, spanHtml);
         handleInput();
         return;
@@ -362,7 +582,7 @@ export function DocumentEditorCanvas({
     handleInput();
   }
 
-  // Keyboard navigation & track changes shortcuts
+  // Keyboard navigation & shortcuts
   function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     // Ctrl+S / Cmd+S -> Trigger Save Version
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -399,17 +619,6 @@ export function DocumentEditorCanvas({
     }
   }
 
-  // Handle BeforeInput for typing in Suggesting mode
-  function handleBeforeInput(e: any) {
-    if (trackChangesMode !== 'suggesting' || readOnly) return;
-
-    if (e.inputType === 'insertText' && e.data) {
-      e.preventDefault();
-      insertTrackedText(e.data);
-    }
-  }
-
-  // Capture selection for comments
   function captureSelection() {
     broadcastLocalCursor();
   }
@@ -423,7 +632,16 @@ export function DocumentEditorCanvas({
     }
   }
 
-  // Select Change and scroll into view
+  // Clicking a formatted element in the editor selects its detail badge in Markup & Formatting
+  function handleEditorClick(e: React.MouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement;
+    const changeEl = target.closest<HTMLElement>('.cml-change-item');
+    if (changeEl && changeEl.dataset.changeId) {
+      handleSelectChange(changeEl.dataset.changeId);
+    }
+  }
+
+  // Select Change and scroll both editor and markup badge into view
   function handleSelectChange(changeId: string) {
     setActiveChangeId(changeId);
     if (!editorRef.current) return;
@@ -435,20 +653,19 @@ export function DocumentEditorCanvas({
     }
   }
 
-  // Select Comment and scroll quote into view
+  // Feat 2: Clicks comment icon on the right of the document -> highlights the actual comment in comments column
   function handleSelectComment(commentId: string) {
     onSelectQuoteId?.(commentId);
     if (!editorRef.current) return;
     const comment = comments.find((c) => c.id === commentId);
     if (!comment?.quoteText) return;
 
+    // Scroll to the commented line in the document smoothly
     const range = rangeForQuote(editorRef.current, comment.quoteText);
     const node = range?.startContainer;
     const el = node instanceof HTMLElement ? node : node?.parentElement;
     if (el) {
       el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      el.classList.add('cml-focus-pulse');
-      setTimeout(() => el.classList.remove('cml-focus-pulse'), 2500);
     }
   }
 
@@ -463,8 +680,7 @@ export function DocumentEditorCanvas({
   function handlePrevChange() {
     if (trackedChanges.length === 0) return;
     const currentIdx = trackedChanges.findIndex((c) => c.id === activeChangeId);
-    const prevIdx =
-      currentIdx <= 0 ? trackedChanges.length - 1 : currentIdx - 1;
+    const prevIdx = currentIdx <= 0 ? trackedChanges.length - 1 : currentIdx - 1;
     handleSelectChange(trackedChanges[prevIdx].id);
   }
 
@@ -628,6 +844,8 @@ export function DocumentEditorCanvas({
       <div className="flex flex-col lg:flex-row min-h-[660px] divide-y lg:divide-y-0 lg:divide-x divide-zinc-800">
         {/* Document Canvas Container */}
         <div
+          ref={canvasContainerRef}
+          onScroll={handleCanvasScroll}
           className={`flex-1 overflow-auto p-4 sm:p-6 lg:p-8 flex justify-center ${
             isDarkMode ? 'bg-[#121215]' : 'bg-slate-100/70'
           }`}
@@ -643,7 +861,7 @@ export function DocumentEditorCanvas({
             <div
               id="contract-document-page"
               ref={pageRef}
-              className={`relative min-h-[940px] rounded-xl border p-8 sm:p-12 shadow-sm transition ${
+              className={`relative min-h-[940px] rounded-xl border p-8 sm:p-12 pr-14 shadow-sm transition ${
                 isDarkMode
                   ? 'border-zinc-800/90 bg-[#18181c] text-zinc-100'
                   : 'border-ink-200/90 bg-white text-ink-900'
@@ -673,7 +891,7 @@ export function DocumentEditorCanvas({
                   editorRef={editorRef}
                 />
 
-                {/* Rich-Text Editable Content */}
+                {/* Feat 1: Rich-Text Editable Content with multi-user color rendering */}
                 <div
                   ref={editorRef}
                   id="contract-editable-content"
@@ -681,15 +899,53 @@ export function DocumentEditorCanvas({
                   suppressContentEditableWarning
                   onInput={handleInput}
                   onBeforeInput={handleBeforeInput}
+                  onPaste={handlePaste}
                   onKeyDown={handleKeyDown}
                   onMouseUp={captureSelection}
                   onKeyUp={captureSelection}
+                  onClick={handleEditorClick}
                   className={`editor-doc relative z-10 prose max-w-none focus:outline-none ${
                     isDarkMode
                       ? 'prose-invert text-zinc-100 [&>p]:leading-relaxed [&>p]:mb-4 font-sans text-sm'
                       : 'prose-slate text-ink-900 [&>p]:leading-relaxed [&>p]:mb-4 font-sans text-sm'
                   } [&>blockquote]:border-l-4 [&>blockquote]:border-blue-500 [&>blockquote]:p-3 [&>h2]:mb-3 [&>h2]:mt-6 [&>h2]:font-serif [&>h2]:text-xl [&>h2]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>h3]:font-serif [&>h3]:text-base [&>h3]:font-semibold`}
                 />
+
+                {/* FEAT 2: Comment Icons on the right of the document next to commented text (NO text highlight) */}
+                <div className="absolute -right-10 sm:-right-12 top-0 bottom-0 w-10 pointer-events-none z-20">
+                  {comments.map((comment) => {
+                    const top = resolvedCommentPositions[comment.id];
+                    if (typeof top !== 'number') return null;
+                    const isCommentActive = comment.id === activeQuoteId;
+
+                    return (
+                      <button
+                        key={`comment-icon-${comment.id}`}
+                        type="button"
+                        title={`Comment by ${comment.author.name}: "${comment.content.slice(
+                          0,
+                          50,
+                        )}..." (Click to highlight comment)`}
+                        onClick={() => handleSelectComment(comment.id)}
+                        style={{ top: `${top}px` }}
+                        className={`pointer-events-auto absolute left-0 -translate-y-1/2 flex items-center justify-center rounded-full p-2 transition-all duration-200 cursor-pointer shadow-md ${
+                          isCommentActive
+                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/50 scale-125 z-30 ring-2 ring-white/80'
+                            : 'bg-zinc-800 text-zinc-300 hover:bg-blue-600 hover:text-white hover:scale-110 border border-zinc-700'
+                        }`}
+                      >
+                        {/* Speech bubble icon matching screenshot */}
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Document Footer */}
@@ -701,7 +957,7 @@ export function DocumentEditorCanvas({
           </div>
         </div>
 
-        {/* Right Margin Review Rail (Markup/Formatting + Comments from Screenshot, without Accept/Reject) */}
+        {/* Right Margin Review Rail (ISSUE 1: Markup detail badges positioned next to formatted text) */}
         <DocumentReviewMargin
           comments={comments}
           activeCommentId={activeQuoteId}
@@ -726,6 +982,10 @@ export function DocumentEditorCanvas({
           trackChangesMode={trackChangesMode}
           onChangeTrackChangesMode={setTrackChangesMode}
           readOnly={readOnly}
+          changePositions={changePositions}
+          commentPositions={commentPositions}
+          badgeContainerRef={badgeContainerRef}
+          onBadgeScroll={handleBadgeScroll}
         />
       </div>
 

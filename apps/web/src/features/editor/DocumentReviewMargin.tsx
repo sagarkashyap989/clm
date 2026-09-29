@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, type FC } from 'react';
+import { useState, useRef, useEffect, useMemo, type FC, type RefObject } from 'react';
 import type { ContractComment, TrackedChange } from '@cml/shared';
 
 export interface DocumentReviewMarginProps {
@@ -20,6 +20,10 @@ export interface DocumentReviewMarginProps {
   onChangeTrackChangesMode: (mode: 'editing' | 'suggesting' | 'viewing') => void;
 
   readOnly?: boolean;
+  changePositions?: Record<string, number>;
+  commentPositions?: Record<string, number>;
+  badgeContainerRef?: RefObject<HTMLDivElement>;
+  onBadgeScroll?: () => void;
 }
 
 function formatRelativeTime(dateString: string): string {
@@ -63,6 +67,9 @@ export const DocumentReviewMargin: FC<DocumentReviewMarginProps> = ({
   trackChangesMode,
   onChangeTrackChangesMode,
   readOnly = false,
+  changePositions = {},
+  badgeContainerRef,
+  onBadgeScroll,
 }) => {
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
@@ -74,12 +81,56 @@ export const DocumentReviewMargin: FC<DocumentReviewMarginProps> = ({
   const [newCommentText, setNewCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const newCommentInputRef = useRef<HTMLTextAreaElement>(null);
+  const commentsContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (pendingQuoteText && newCommentInputRef.current) {
       newCommentInputRef.current.focus();
     }
   }, [pendingQuoteText]);
+
+  // When activeCommentId changes, smoothly scroll the comment card into view and center it
+  useEffect(() => {
+    if (!activeCommentId) return;
+    const cardEl = document.getElementById(`comment-card-${activeCommentId}`);
+    if (cardEl) {
+      cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [activeCommentId]);
+
+  // When activeChangeId changes, smoothly scroll the markup detail badge into view
+  useEffect(() => {
+    if (!activeChangeId) return;
+    const badgeEl = document.getElementById(`change-card-${activeChangeId}`);
+    if (badgeEl) {
+      badgeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [activeChangeId]);
+
+  // Issue 1: Compute non-overlapping vertical positions for Markup & Formatting badges
+  // so each detail badge sits horizontally aligned directly next to its formatted text in the document
+  const resolvedBadgePositions = useMemo(() => {
+    const sorted = [...trackedChanges].sort(
+      (a, b) => (changePositions[a.id] ?? 0) - (changePositions[b.id] ?? 0),
+    );
+    let lastY = 8;
+    const posMap: Record<string, number> = {};
+    sorted.forEach((ch) => {
+      const rawY = changePositions[ch.id];
+      const targetY = typeof rawY === 'number' && rawY > 0 ? rawY : lastY;
+      const finalY = Math.max(targetY, lastY);
+      posMap[ch.id] = finalY;
+      lastY = finalY + 46; // minimum clearance so adjacent badges don't collide
+    });
+    return posMap;
+  }, [trackedChanges, changePositions]);
+
+  // Total container height so the markup column matches the document length
+  const maxBadgeHeight = useMemo(() => {
+    const vals = Object.values(resolvedBadgePositions);
+    if (vals.length === 0) return 600;
+    return Math.max(600, Math.max(...vals) + 140);
+  }, [resolvedBadgePositions]);
 
   // Comment Navigation: next / prev
   const currentCommentIndex = useMemo(() => {
@@ -136,7 +187,7 @@ export const DocumentReviewMargin: FC<DocumentReviewMarginProps> = ({
       className="flex flex-col lg:flex-row w-full lg:w-[540px] xl:w-[580px] shrink-0 bg-[#09090b] text-zinc-100 select-text overflow-hidden border-l border-zinc-800"
     >
       {/* SECTION 1: Markup & Formatting Stream Column (Middle Column from Word screenshot) */}
-      <div className="w-full lg:w-[210px] xl:w-[230px] shrink-0 border-b lg:border-b-0 lg:border-r border-zinc-800/80 bg-[#121215] flex flex-col">
+      <div className="w-full lg:w-[220px] xl:w-[240px] shrink-0 border-b lg:border-b-0 lg:border-r border-zinc-800/80 bg-[#121215] flex flex-col">
         {/* Header for Markup */}
         <div className="flex items-center justify-between border-b border-zinc-800/80 px-3 py-2 text-[11px] font-semibold text-zinc-400">
           <div className="flex items-center gap-1.5">
@@ -161,46 +212,70 @@ export const DocumentReviewMargin: FC<DocumentReviewMarginProps> = ({
           </select>
         </div>
 
-        {/* List of formatting & change callouts */}
-        <div className="flex-1 overflow-y-auto p-2.5 space-y-3 font-sans text-xs">
+        {/* ISSUE 1: Vertically positioned badges sitting directly next to the formatted text in the document */}
+        <div
+          ref={badgeContainerRef}
+          onScroll={onBadgeScroll}
+          className="relative flex-1 overflow-y-auto p-2 font-sans text-xs scrollbar-thin"
+          style={{ minHeight: `${maxBadgeHeight}px` }}
+        >
           {trackedChanges.length === 0 ? (
-            <div className="py-6 text-center text-[11px] text-zinc-500">
+            <div className="py-8 text-center text-[11px] text-zinc-500">
               No formatting or text revisions recorded.
             </div>
           ) : (
             trackedChanges.map((change) => {
               const isActive = change.id === activeChangeId;
+              const top = resolvedBadgePositions[change.id] ?? 8;
+              const authorColor = change.author.color || '#ef4444';
+
               return (
                 <div
                   key={change.id}
+                  id={`change-card-${change.id}`}
                   onClick={() => onSelectChange(change.id)}
-                  className={`group relative pl-2.5 py-1.5 border-l-2 cursor-pointer transition-all duration-150 ${
+                  style={{
+                    top: `${top}px`,
+                    borderLeftColor: authorColor,
+                  }}
+                  className={`absolute left-2 right-2 pl-2.5 pr-2 py-1.5 border-l-4 cursor-pointer transition-all duration-150 rounded-r shadow-xs ${
                     isActive
-                      ? 'border-red-500 bg-red-950/20 text-white'
-                      : 'border-red-500/80 hover:bg-zinc-800/40 text-zinc-300'
+                      ? 'bg-zinc-800/90 text-white ring-2 ring-blue-500 shadow-md z-20'
+                      : 'bg-[#18181c] hover:bg-zinc-800 text-zinc-300 border-zinc-700'
                   }`}
                 >
-                  {/* Author Name */}
-                  <div className="font-bold text-[11px] text-zinc-200 leading-tight">
-                    {change.author.name || 'DSK Legal'}
+                  {/* Author Name in Author Color */}
+                  <div className="flex items-center justify-between">
+                    <div
+                      className="font-bold text-[11px] leading-tight"
+                      style={{ color: authorColor }}
+                    >
+                      {change.author.name || 'Author'}
+                    </div>
+                    <span className="text-[9px] text-zinc-500">
+                      {formatRelativeTime(change.timestamp)}
+                    </span>
                   </div>
 
                   {/* Markup Detail line */}
                   <div className="text-[10px] leading-snug text-zinc-400 mt-0.5">
                     {change.type === 'format' ? (
                       <>
-                        <strong className="text-zinc-300 font-semibold">Formatted:</strong>{' '}
+                        <strong className="text-zinc-200 font-semibold">Formatted:</strong>{' '}
                         {change.formatDetail || 'Font: Bold'}
                       </>
                     ) : change.type === 'insert' ? (
                       <>
-                        <strong className="text-emerald-400 font-semibold">Inserted:</strong> “
-                        {change.text.length > 45 ? change.text.slice(0, 45) + '…' : change.text}”
+                        <strong className="font-semibold" style={{ color: authorColor }}>
+                          Inserted:
+                        </strong>{' '}
+                        “
+                        {change.text.length > 32 ? change.text.slice(0, 32) + '…' : change.text}”
                       </>
                     ) : (
                       <>
                         <strong className="text-red-400 font-semibold">Deleted:</strong> “
-                        {change.text.length > 45 ? change.text.slice(0, 45) + '…' : change.text}”
+                        {change.text.length > 32 ? change.text.slice(0, 32) + '…' : change.text}”
                       </>
                     )}
                   </div>
@@ -250,7 +325,10 @@ export const DocumentReviewMargin: FC<DocumentReviewMarginProps> = ({
         </div>
 
         {/* Scrollable Comments List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        <div
+          ref={commentsContainerRef}
+          className="flex-1 overflow-y-auto p-3 space-y-3"
+        >
           {/* Active Pending Comment Card (when text is highlighted) */}
           {pendingQuoteText && (
             <div
@@ -303,7 +381,7 @@ export const DocumentReviewMargin: FC<DocumentReviewMarginProps> = ({
             <div className="rounded-xl border border-dashed border-zinc-800 p-6 text-center text-xs text-zinc-500">
               <p className="font-semibold text-zinc-400">No Comments Yet</p>
               <p className="mt-1 text-[11px] text-zinc-500">
-                Select text in the contract and click <strong>Comment</strong> (or press{' '}
+                Select text in the contract and click <strong>Add Comment</strong> (or press{' '}
                 <kbd className="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] text-zinc-300">
                   Ctrl+M
                 </kbd>
@@ -312,7 +390,7 @@ export const DocumentReviewMargin: FC<DocumentReviewMarginProps> = ({
             </div>
           )}
 
-          {/* Cards matching the Word legal review screenshot */}
+          {/* FEAT 2: Comment Cards with striking highlight when comment icon is clicked */}
           {comments.map((comment) => {
             const isActive = comment.id === activeCommentId;
             const isReplying = replyingTo === comment.id;
@@ -325,16 +403,16 @@ export const DocumentReviewMargin: FC<DocumentReviewMarginProps> = ({
                 key={comment.id}
                 id={`comment-card-${comment.id}`}
                 onClick={() => onSelectComment(comment.id)}
-                className={`relative rounded-2xl border p-3.5 transition-all duration-150 cursor-pointer ${
+                className={`relative rounded-2xl border p-3.5 transition-all duration-200 cursor-pointer ${
                   isActive
-                    ? 'border-blue-500/90 bg-[#1f1f23] ring-1 ring-blue-500/40 shadow-lg'
-                    : 'border-zinc-800/90 bg-[#18181b] hover:border-zinc-700 hover:bg-[#1b1b1f]'
+                    ? 'border-blue-400 bg-blue-950/40 ring-2 ring-blue-500 shadow-2xl scale-[1.01] z-20'
+                    : 'border-zinc-800/90 bg-[#18181b] hover:border-zinc-700 hover:bg-[#1c1c20]'
                 }`}
               >
-                {/* Header: Avatar, Name, Timestamp, Menu */}
+                {/* Header: Avatar, Name, Timestamp, Active Badge, Menu */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2.5">
-                    {/* Dark circle avatar with user silhouette */}
+                    {/* Circle avatar with user silhouette */}
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-700 text-zinc-300">
                       <svg
                         className="h-4 w-4"
@@ -355,54 +433,63 @@ export const DocumentReviewMargin: FC<DocumentReviewMarginProps> = ({
                     </div>
                   </div>
 
-                  {/* Three-dots menu button */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      title="Comment options"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenMenuCommentId(isMenuOpen ? null : comment.id);
-                      }}
-                      className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                    >
-                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
-                      </svg>
-                    </button>
+                  <div className="flex items-center gap-1.5">
+                    {/* FEAT 2: Prominent Active Comment Badge when selected */}
+                    {isActive && (
+                      <span className="rounded-full bg-blue-500/20 border border-blue-400/60 px-2 py-0.5 text-[9px] font-bold text-blue-300 uppercase tracking-wider">
+                        Active
+                      </span>
+                    )}
 
-                    {/* Dropdown menu */}
-                    {isMenuOpen && (
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="absolute right-0 top-6 z-30 w-36 rounded-xl border border-zinc-700 bg-zinc-800 py-1 text-xs shadow-xl"
+                    {/* Three-dots menu button */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        title="Comment options"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuCommentId(isMenuOpen ? null : comment.id);
+                        }}
+                        className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                       >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOpenMenuCommentId(null);
-                            onResolveComment(comment.id);
-                          }}
-                          className="w-full px-3 py-1.5 text-left text-zinc-200 hover:bg-zinc-700"
+                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+                        </svg>
+                      </button>
+
+                      {/* Dropdown menu */}
+                      {isMenuOpen && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 top-6 z-30 w-36 rounded-xl border border-zinc-700 bg-zinc-800 py-1 text-xs shadow-xl"
                         >
-                          {comment.isResolved ? 'Reopen thread' : 'Resolve thread'}
-                        </button>
-                        {!readOnly && onDeleteComment && (
                           <button
                             type="button"
                             onClick={() => {
                               setOpenMenuCommentId(null);
-                              if (window.confirm('Delete this comment?')) {
-                                onDeleteComment(comment.id);
-                              }
+                              onResolveComment(comment.id);
                             }}
-                            className="w-full px-3 py-1.5 text-left text-red-400 hover:bg-zinc-700"
+                            className="w-full px-3 py-1.5 text-left text-zinc-200 hover:bg-zinc-700"
                           >
-                            Delete comment
+                            {comment.isResolved ? 'Reopen thread' : 'Resolve thread'}
                           </button>
-                        )}
-                      </div>
-                    )}
+                          {!readOnly && onDeleteComment && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenMenuCommentId(null);
+                                if (window.confirm('Delete this comment?')) {
+                                  onDeleteComment(comment.id);
+                                }
+                              }}
+                              className="w-full px-3 py-1.5 text-left text-red-400 hover:bg-zinc-700"
+                            >
+                              Delete comment
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

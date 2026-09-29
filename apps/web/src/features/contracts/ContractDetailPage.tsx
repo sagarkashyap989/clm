@@ -159,6 +159,14 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
   const activeCommentsCount = commentsData?.comments?.filter((c) => !c.isResolved).length ?? 0;
   const messagesCount = chatData?.messages?.length ?? 0;
 
+  const currentUserColor = useMemo(() => {
+    if (user?.id === 'usr_2' || user?.id?.includes('sakshi')) return '#ef4444';
+    if (user?.id === 'usr_dsk' || user?.id?.includes('dsk')) return '#9333ea';
+    if (user?.id === 'usr_3' || user?.id?.includes('john')) return '#10b981';
+    if (user?.id === 'usr_viewer') return '#f59e0b';
+    return '#2563eb';
+  }, [user?.id]);
+
   // Decide initial editor content: draft content > latest version content > fallback template
   useEffect(() => {
     if (contract) {
@@ -748,7 +756,7 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
               activeUsers={activeUsers}
               currentUserId={user?.id}
               currentUserName={user?.name || 'Administrator'}
-              currentUserColor="#0f766e"
+              currentUserColor={currentUserColor}
               onBroadcastCursor={sendCursor}
               onBroadcastSelection={sendSelection}
               notifications={notifications}
