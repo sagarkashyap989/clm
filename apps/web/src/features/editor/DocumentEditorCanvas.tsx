@@ -403,30 +403,139 @@ export function DocumentEditorCanvas({
     recalculatePositions();
   }
 
-  // Feat 1: Different user editing text gets that user's distinct color
+  // Helper: Normalize caret position so typing next to foreign or deleted text never bleeds into it
+  function normalizeCaretPosition(editor: HTMLElement | null, activeUserId: string): void {
+    if (!editor) return;
+    const sel = window.getSelection();
+    if (!sel || !sel.isCollapsed || !sel.rangeCount) return;
+
+    const node = sel.anchorNode;
+    if (!node || !editor.contains(node)) return;
+
+    const parentEl = node instanceof HTMLElement ? node : node.parentElement;
+    if (!parentEl) return;
+
+    // 1. If inside or at deleted text (.cml-change-delete): pop caret OUT
+    const deleteSpan = parentEl.closest<HTMLElement>('.cml-change-delete');
+    if (deleteSpan) {
+      const range = sel.getRangeAt(0);
+      const isStart = range.startOffset === 0 && node === deleteSpan.firstChild;
+      if (isStart) {
+        range.setStartBefore(deleteSpan);
+      } else {
+        range.setStartAfter(deleteSpan);
+      }
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+
+    // 2. If at boundary of a change item belonging to another user: pop caret OUT
+    const foreignSpan = parentEl.closest<HTMLElement>('.cml-change-item');
+    if (foreignSpan && foreignSpan.dataset.authorId !== activeUserId) {
+      const range = sel.getRangeAt(0);
+      const isAtEnd =
+        node === foreignSpan.lastChild &&
+        range.startOffset === (node.textContent || '').length;
+      const isAtStart =
+        node === foreignSpan.firstChild && range.startOffset === 0;
+
+      if (isAtEnd) {
+        range.setStartAfter(foreignSpan);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else if (isAtStart) {
+        range.setStartBefore(foreignSpan);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+  }
+
+  // Helper: Split an inline change span cleanly when inserting in the middle
+  function splitElementAtRange(element: HTMLElement, range: Range): void {
+    const firstTextNode = element.firstChild;
+    const lastTextNode = element.lastChild;
+
+    if (range.startContainer === firstTextNode && range.startOffset === 0) {
+      range.setStartBefore(element);
+      range.collapse(true);
+      return;
+    }
+
+    const lastLen = (lastTextNode?.textContent || '').length;
+    if (range.startContainer === lastTextNode && range.startOffset === lastLen) {
+      range.setStartAfter(element);
+      range.collapse(true);
+      return;
+    }
+
+    try {
+      const endRange = document.createRange();
+      endRange.setStart(range.startContainer, range.startOffset);
+      endRange.setEndAfter(lastTextNode || element);
+
+      const extracted = endRange.extractContents();
+      if (extracted && extracted.textContent && extracted.textContent.length > 0) {
+        const secondPart = element.cloneNode(false) as HTMLElement;
+        secondPart.dataset.changeId = `chg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        secondPart.appendChild(extracted);
+        element.parentNode?.insertBefore(secondPart, element.nextSibling);
+      }
+
+      range.setStartAfter(element);
+      range.collapse(true);
+    } catch {
+      range.setStartAfter(element);
+      range.collapse(true);
+    }
+  }
+
+  // Feat 1: Different user editing text gets that user's distinct color and never bleeds into adjacent edits
   function handleBeforeInput(e: any) {
     if (readOnly || trackChangesMode === 'viewing') return;
 
     if (e.inputType === 'insertText' && e.data) {
       const sel = window.getSelection();
-      if (!sel || !sel.rangeCount) return;
+      if (!sel || !sel.rangeCount || !editorRef.current) return;
 
       const node = sel.anchorNode;
-      const parent = node instanceof HTMLElement ? node : node?.parentElement;
-      const existingAuthorSpan = parent?.closest<HTMLElement>('.cml-change-item');
+      if (!node || !editorRef.current.contains(node)) return;
 
-      // If the cursor is already inside the current user's editing span (and not a deleted span):
-      // allow native browser insertion so consecutive typing flows naturally with zero keystroke fragmentation!
-      if (
-        existingAuthorSpan &&
-        existingAuthorSpan.dataset.authorId === currentUserId &&
-        !existingAuthorSpan.classList.contains('cml-change-delete')
-      ) {
-        return; // native insert inside author's colored span
+      const parent = node instanceof HTMLElement ? node : node?.parentElement;
+      if (!parent) return;
+
+      const deleteSpan = parent.closest<HTMLElement>('.cml-change-delete');
+      const anyChangeSpan = parent.closest<HTMLElement>('.cml-change-item');
+      const isAnotherAuthor = Boolean(anyChangeSpan && anyChangeSpan.dataset.authorId !== currentUserId);
+
+      // If the cursor is already inside the current user's active editing span (and NOT a deleted span):
+      // allow native browser insertion so typing flows naturally without breaking text nodes
+      if (anyChangeSpan && !isAnotherAuthor && !deleteSpan) {
+        return;
       }
 
-      // Otherwise, create a clean author span for the current user and insert the character
+      // User is either next to/inside another author's span, or a deleted span, or in unformatted text:
       e.preventDefault();
+
+      const range = sel.getRangeAt(0);
+
+      // Never insert inside deleted text
+      if (deleteSpan) {
+        if (range.startOffset === 0 && node === deleteSpan.firstChild) {
+          range.setStartBefore(deleteSpan);
+        } else {
+          range.setStartAfter(deleteSpan);
+        }
+        range.collapse(true);
+      } else if (anyChangeSpan && isAnotherAuthor) {
+        // Never insert inside another author's colored span - split or place outside!
+        splitElementAtRange(anyChangeSpan, range);
+      }
+
       const changeId = `chg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const span = document.createElement('span');
       span.className = 'cml-change-item cml-change-insert';
@@ -438,15 +547,15 @@ export function DocumentEditorCanvas({
       span.style.color = currentUserColor;
       span.style.textDecoration = trackChangesMode === 'suggesting' ? 'underline' : 'none';
       span.style.textDecorationColor = currentUserColor;
+      span.style.textDecorationLine = trackChangesMode === 'suggesting' ? 'underline' : 'none';
 
       const textNode = document.createTextNode(e.data);
       span.appendChild(textNode);
 
-      const range = sel.getRangeAt(0);
       range.deleteContents();
       range.insertNode(span);
 
-      // Place caret right after the inserted character inside the span
+      // Place caret right after the inserted character inside our span
       range.setStartAfter(textNode);
       range.collapse(true);
       sel.removeAllRanges();
@@ -456,13 +565,31 @@ export function DocumentEditorCanvas({
     }
   }
 
-  // Feat 1: Paste handler with distinct user color
+  // Feat 1: Paste handler with distinct user color without inheriting adjacent styles
   function handlePaste(e: ClipboardEvent<HTMLDivElement>) {
     if (readOnly || trackChangesMode === 'viewing') return;
     const text = e.clipboardData.getData('text/plain');
     if (!text) return;
 
     e.preventDefault();
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !editorRef.current) return;
+
+    const node = sel.anchorNode;
+    const parent = node instanceof HTMLElement ? node : node?.parentElement;
+    const deleteSpan = parent?.closest<HTMLElement>('.cml-change-delete');
+    const anyChangeSpan = parent?.closest<HTMLElement>('.cml-change-item');
+    const isAnotherAuthor = Boolean(anyChangeSpan && anyChangeSpan.dataset.authorId !== currentUserId);
+
+    const range = sel.getRangeAt(0);
+
+    if (deleteSpan) {
+      range.setStartAfter(deleteSpan);
+      range.collapse(true);
+    } else if (anyChangeSpan && isAnotherAuthor) {
+      splitElementAtRange(anyChangeSpan, range);
+    }
+
     const changeId = `chg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const span = document.createElement('span');
     span.className = 'cml-change-item cml-change-insert';
@@ -474,18 +601,16 @@ export function DocumentEditorCanvas({
     span.style.color = currentUserColor;
     span.style.textDecoration = trackChangesMode === 'suggesting' ? 'underline' : 'none';
     span.style.textDecorationColor = currentUserColor;
+    span.style.textDecorationLine = trackChangesMode === 'suggesting' ? 'underline' : 'none';
     span.textContent = text;
 
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      range.deleteContents();
-      range.insertNode(span);
-      range.setStartAfter(span);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
+    range.deleteContents();
+    range.insertNode(span);
+    range.setStartAfter(span);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+
     handleInput();
   }
 
@@ -551,6 +676,11 @@ export function DocumentEditorCanvas({
 
   // Keyboard navigation & shortcuts
   function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    // Printable key (typing): normalize cursor position so we don't start typing inside foreign or deleted spans
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+      normalizeCaretPosition(editorRef.current, currentUserId);
+    }
+
     // Ctrl+S / Cmd+S -> Trigger Save Version
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault();
@@ -587,6 +717,7 @@ export function DocumentEditorCanvas({
   }
 
   function captureSelection() {
+    normalizeCaretPosition(editorRef.current, currentUserId);
     broadcastLocalCursor();
   }
 
@@ -601,6 +732,7 @@ export function DocumentEditorCanvas({
 
   // Clicking a formatted element in the editor selects its detail badge in Markup & Formatting
   function handleEditorClick(e: React.MouseEvent<HTMLDivElement>) {
+    normalizeCaretPosition(editorRef.current, currentUserId);
     const target = e.target as HTMLElement;
     const changeEl = target.closest<HTMLElement>('.cml-change-item');
     if (changeEl && changeEl.dataset.changeId) {
