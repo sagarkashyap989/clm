@@ -36,25 +36,25 @@ function mockApiPlugin(): Plugin {
   let contractsList: any[] = [
     {
       id: 'ctr_1',
-      name: 'Artist Licensing Agreement',
-      type: 'licensing',
+      name: 'Commercial Premises Service Agreement',
+      type: 'service',
       status: 'in_review',
-      counterparty: 'Gilded Records Inc.',
-      description: 'Master licensing terms for international distribution across streaming and physical media.',
+      counterparty: 'DSK Legal / The Operator',
+      description: 'Master commercial occupancy terms with fit out specifications, handover conditions, and service fees.',
       startDate: '2026-01-09T00:00:00.000Z',
-      endDate: '2027-01-09T00:00:00.000Z',
-      tags: ['Artist', 'Licensing', 'Music'],
+      endDate: '2031-01-09T00:00:00.000Z',
+      tags: ['Commercial', 'Premises', 'Handover', 'Service Fee'],
       originalFile: {
-        fileName: 'artist_licensing_agreement_v1.docx',
+        fileName: 'commercial_premises_service_agreement_redlines.docx',
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        size: 148520,
+        size: 198520,
         uploadedAt: '2026-01-09T14:20:00.000Z',
       },
       currentVersionNumber: 2,
-      owner: { id: 'usr_2', name: 'Sarah Connor', email: 'sarah@example.com' },
-      createdBy: { id: 'usr_2', name: 'Sarah Connor', email: 'sarah@example.com' },
+      owner: { id: 'usr_2', name: 'Sakshi Soni', email: 'sakshi@example.com' },
+      createdBy: { id: 'usr_2', name: 'Sakshi Soni', email: 'sakshi@example.com' },
       createdAt: '2026-01-09T14:20:00.000Z',
-      updatedAt: '2026-03-10T11:45:00.000Z',
+      updatedAt: '2026-09-22T18:04:00.000Z',
     },
     {
       id: 'ctr_2',
@@ -179,25 +179,17 @@ function mockApiPlugin(): Plugin {
         createdBy: { id: 'usr_2', name: 'Sarah Connor', email: 'sarah@example.com' },
         source: 'editor',
         file: null,
-        changeDescription: 'Amended royalty rate to 70% and introduced 1-year renewal option',
-        createdAt: '2026-03-10T11:45:00.000Z',
-        editorContent: `<h2>ARTIST EXCLUSIVE LICENSING AGREEMENT</h2>
-<p>This Artist Exclusive Licensing Agreement (the "Agreement") is made and entered into as of January 9, 2026, by and between <strong>Gilded Records Inc.</strong>, a Delaware corporation ("Licensor"), and <strong>Acme Contracts Corp</strong> ("Licensee").</p>
+        changeDescription: 'Legal counsel redlines with DSK Legal formatting and occupancy clarifications',
+        createdAt: '2026-09-22T18:04:00.000Z',
+        editorContent: `<p><span class="cml-change-item cml-change-insert" data-change-id="chg_0" data-author-name="DSK Legal" data-format-detail="Font: Underline">OCCUPIER shall be entitled to visit the PREMISES to inspect quality of the fit out work being carried out by the OPERATOR from the PREMISES.</span></p>
 
-<h3>1. GRANT OF LICENSE</h3>
-<p>Licensor hereby grants to Licensee an exclusive, worldwide, royalty-bearing license to distribute, perform, stream, and synchronize the Master Recordings and underlying Musical Compositions described in Schedule A hereto, including all future remastered digital audio editions.</p>
+<p><span class="cml-change-item cml-change-insert" data-change-id="chg_1" data-author-name="DSK Legal" data-format-detail="Font: Underline">iii.</span> The OPERATOR shall handover the PREMISES fully furnished as per the layout plan as annexed hereto in <strong>Annexure 2</strong> <span class="cml-change-item cml-change-insert" data-change-id="chg_2" data-author-name="DSK Legal" data-format-detail="Font: Bold">AND after finishing fit out work as per the details set out in Annexure 4 annexed hereto</span> on the <span class="cml-change-item cml-change-delete" data-change-id="chg_3" data-author-name="DSK Legal">1st January, 2027[•]</span> (“<strong>Handover Date</strong>”), failing which the Handover Date, <span class="cml-change-item cml-change-insert" data-change-id="chg_4" data-author-name="DSK Legal">and</span> date of payment of <span class="cml-change-item cml-change-format" data-change-id="chg_5" data-author-name="DSK Legal" data-format-detail="Font: (Default) Times New Roman, 12 pt">mM</span>onthly Service Fee (<span class="cml-change-item cml-change-insert" data-change-id="chg_6" data-author-name="DSK Legal">defined hereinafter</span>) <span class="cml-change-item cml-change-insert" data-change-id="chg_7" data-author-name="DSK Legal">and commencement of the OCCUPANCY PERIOD</span> shall stand extended till such period the PREMISES are handed over as per the Handover Condition as mutually agreed between the Parties. <span class="cml-comment-boxed">[It is clarified that subject to the OPERATOR having completed the fit out work as per the makes, specification, models and workmanship quality provided by the OCCUPIER and set out in Annexure 4, the OCCUPIER shall accept the hand over the PREMISES from the OPERATOR on the Handover Date.]</span></p>
 
-<h3>2. TERM AND TERRITORY</h3>
-<p>The Term of this Agreement commences on the Effective Date and shall continue for an initial period of twelve (12) months, through and including January 9, 2027, <span class="cml-change-item cml-change-insert" data-change-id="chg_sample_1" data-author-id="usr_2" data-author-name="Sarah Connor" data-author-color="#059669" data-timestamp="2026-03-10T11:45:00.000Z">with an option for mutual renewal for one (1) additional consecutive year</span>. The Territory shall encompass the entire World, <span class="cml-change-item cml-change-format" data-change-id="chg_sample_3" data-format="bold" data-format-detail="Bold" data-author-id="usr_2" data-author-name="Sarah Connor" data-author-color="#059669" data-timestamp="2026-03-12T14:20:00.000Z" style="font-weight: 700;">specifically prioritizing North American and European streaming platforms</span>.</p>
+<p><span class="cml-change-item cml-change-insert" data-change-id="chg_8" data-author-name="DSK Legal" data-format-detail="Font: Underline">iv. During the Term (along with renewal thereof) the OPERATOR by itself or through other vendors, provide housekeeping services, pest control services, security services, and technical services and other services, at the Premises as more particularly described in the Annexure 2 (“Services”). Additionally, the OPERATION shall also provide IT services which are specifically mentioned in Annexure 2A (“IT Services”). It is clarified that the OCCUPIER is not required to make payment of any fees, charges deposits etc. to the OPERATOR, its vendor and third party for Services and IT Services rendered in the Premises.</span></p>
 
-<h3>3. ROYALTIES AND ACCOUNTING</h3>
-<p>Licensee shall pay to Licensor an enhanced royalty fee equivalent to seventy percent (70%) of Net Digital Revenue. Accounting statements and payments shall be rendered on a calendar quarterly basis <span class="cml-change-item cml-change-delete" data-change-id="chg_sample_2" data-author-id="usr_3" data-author-name="John Doe" data-author-color="#d97706" data-timestamp="2026-03-11T09:15:00.000Z">within forty-five (45) days</span> within thirty (30) days following the close of each quarter.</p>
+<p><span class="cml-change-item cml-change-delete" data-change-id="chg_9" data-author-name="DSK Legal">ii.</span><span class="cml-change-item cml-change-insert" data-change-id="chg_10" data-author-name="DSK Legal">v.</span> The Handover Date is also referred to as the <span class="cml-change-item cml-change-format" data-change-id="chg_11" data-author-name="DSK Legal" data-format-detail="Font: Not Bold">Mm</span>onthly Service Fee Commencement Date.</p>
 
-<h3>4. REPRESENTATIONS AND WARRANTIES</h3>
-<p>Licensor represents, warrants, and covenants that it has full authority to enter into this Agreement, that the Masters do not infringe upon any third-party intellectual property rights, and that all third-party clearances and union obligations have been satisfied.</p>
-
-<h3>5. INDEMNIFICATION AND LIABILITY</h3>
-<p>Each party agrees to indemnify, defend, and hold harmless the other party against any claims, losses, or damages arising out of a breach of any representation or warranty made herein. Aggregate liability shall be capped at a maximum of Five Hundred Thousand United States Dollars ($500,000).</p>`,
+<p><span class="cml-change-item cml-change-delete" data-change-id="chg_12" data-author-name="DSK Legal">iii.</span><span class="cml-change-item cml-change-insert" data-change-id="chg_13" data-author-name="DSK Legal">vi.</span> The tenure of this SERVICE AGREEMENT shall be for a term of <strong>60 (sixty)</strong> months from the Monthly Service Fee Commencement Date. (“<strong>OCCUPANCY PERIOD</strong>”).</p>`,
       },
       {
         id: 'ver_1_1',
@@ -335,33 +327,39 @@ function mockApiPlugin(): Plugin {
         id: 'cmt_1_1',
         contractId: 'ctr_1',
         versionNumber: 2,
-        quoteText: 'Licensee shall pay to Licensor an enhanced royalty fee equivalent to seventy percent (70%) of Net Digital Revenue.',
-        content: 'Finance has verified that this 70% distribution rate aligns with the executive term sheet signed in Q4.',
-        author: { id: 'usr_2', name: 'Sarah Connor', email: 'sarah@example.com' },
-        isResolved: true,
-        resolvedBy: { id: 'usr_demo', name: 'Administrator' },
-        resolvedAt: '2026-03-11T09:30:00.000Z',
-        createdAt: '2026-03-10T12:00:00.000Z',
-        replies: [
-          {
-            id: 'rep_1_1',
-            content: 'Confirmed. Approved from our end.',
-            author: { id: 'usr_demo', name: 'Administrator', email: 'admin@example.com' },
-            createdAt: '2026-03-10T14:15:00.000Z',
-          },
-        ],
+        quoteText: 'commencement of the OCCUPANCY PERIOD shall stand extended till such period the PREMISES are handed over',
+        content: 'Kindly note that Occupancy term is not extended the term remains the same even if handover date is extended.',
+        author: { id: 'usr_sakshi', name: 'Sakshi Soni', email: 'sakshi@example.com' },
+        isResolved: false,
+        resolvedBy: null,
+        resolvedAt: null,
+        createdAt: '2026-09-22T17:08:00.000Z',
+        replies: [],
       },
       {
         id: 'cmt_1_2',
         contractId: 'ctr_1',
         versionNumber: 2,
-        quoteText: 'Aggregate liability shall be capped at a maximum of Five Hundred Thousand United States Dollars ($500,000).',
-        content: 'Please verify whether the $500k liability cap should exclude willful misconduct and gross negligence.',
-        author: { id: 'usr_3', name: 'John Doe', email: 'john@example.com' },
+        quoteText: 'It is clarified that subject to the OPERATOR having completed the fit out work as per the makes, specification, models and workmanship quality provided by the OCCUPIER and set out in Annexure 4, the OCCUPIER shall accept the hand over the PREMISES from the OPERATOR on the Handover Date.',
+        content: 'This is unnecessary addition as it is already mentioned above that the handover would take place or accepted by Occupier as per layout in Annexure 2 and fit out conditions',
+        author: { id: 'usr_sakshi', name: 'Sakshi Soni', email: 'sakshi@example.com' },
         isResolved: false,
         resolvedBy: null,
         resolvedAt: null,
-        createdAt: '2026-03-12T16:00:00.000Z',
+        createdAt: '2026-09-22T17:11:00.000Z',
+        replies: [],
+      },
+      {
+        id: 'cmt_1_3',
+        contractId: 'ctr_1',
+        versionNumber: 2,
+        quoteText: 'It is clarified that the OCCUPIER is not required to make payment of any fees, charges deposits etc. to the OPERATOR, its vendor and third party for Services and IT Services rendered in the Premises.',
+        content: "Mam doesn't the Service fee include the rent of the premises as well as the charges for the service we provide and if we accept this it would deviate to the understanding that was agreed upon during the previous stakeholder meeting.",
+        author: { id: 'usr_sakshi', name: 'Sakshi Soni', email: 'sakshi@example.com' },
+        isResolved: false,
+        resolvedBy: null,
+        resolvedAt: null,
+        createdAt: '2026-09-22T18:04:00.000Z',
         replies: [],
       },
     ],

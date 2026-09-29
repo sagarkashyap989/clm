@@ -73,11 +73,11 @@ function parseTrackedChangesFromDom(root: HTMLElement): TrackedChange[] {
       id,
       type,
       text: el.innerText || el.textContent || '',
-      formatDetail: el.dataset.formatDetail,
+      formatDetail: el.dataset.formatDetail || (type === 'format' ? 'Font: Bold' : undefined),
       author: {
-        id: el.dataset.authorId || 'usr_unknown',
-        name: el.dataset.authorName || 'Collaborator',
-        color: el.dataset.authorColor || '#0d9488',
+        id: el.dataset.authorId || 'usr_dsk',
+        name: el.dataset.authorName || 'DSK Legal',
+        color: el.dataset.authorColor || '#ef4444',
       },
       timestamp: el.dataset.timestamp || new Date().toISOString(),
       status: 'pending',
@@ -104,8 +104,8 @@ export function DocumentEditorCanvas({
   onDeleteComment,
   activeUsers = [],
   currentUserId = 'usr_demo',
-  currentUserName = 'Administrator',
-  currentUserColor = '#0f766e',
+  currentUserName = 'DSK Legal',
+  currentUserColor = '#ef4444',
   onBroadcastCursor,
   onBroadcastSelection,
   notifications = [],
@@ -114,6 +114,9 @@ export function DocumentEditorCanvas({
 }: DocumentEditorCanvasProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
+
+  // Theme: Dark mode matching screenshot by default, with toggle option
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
   // Mode: editing, suggesting (track changes), viewing
   const [trackChangesMode, setTrackChangesMode] = useState<'editing' | 'suggesting' | 'viewing'>(
@@ -225,7 +228,6 @@ export function DocumentEditorCanvas({
     if (clientRects.length > 0) {
       clientRect = clientRects[0];
     } else {
-      // Fallback: measure bounding rect or parent node rect
       const parentEl =
         range.startContainer instanceof HTMLElement
           ? range.startContainer
@@ -333,16 +335,16 @@ export function DocumentEditorCanvas({
         let formatDetail = command;
         let styleAttr = '';
         if (command === 'bold') {
-          formatDetail = 'Bold';
+          formatDetail = 'Font: Bold';
           styleAttr = 'font-weight: 700;';
         } else if (command === 'italic') {
-          formatDetail = 'Italic';
+          formatDetail = 'Font: Italic';
           styleAttr = 'font-style: italic;';
         } else if (command === 'underline') {
-          formatDetail = 'Underline';
+          formatDetail = 'Font: Underline';
           styleAttr = 'text-decoration: underline;';
         } else if (command === 'strikeThrough') {
-          formatDetail = 'Strikethrough';
+          formatDetail = 'Font: Strikethrough';
           styleAttr = 'text-decoration: line-through;';
         } else if (command === 'formatBlock') {
           formatDetail = value ? `Heading ${value.replace(/[<>/]/g, '')}` : 'Heading';
@@ -419,91 +421,6 @@ export function DocumentEditorCanvas({
     if (quote) {
       setPendingQuoteText(quote);
     }
-  }
-
-  // Accept a Tracked Change
-  function handleAcceptChange(changeId: string) {
-    if (!editorRef.current) return;
-    const el = editorRef.current.querySelector<HTMLElement>(`[data-change-id="${changeId}"]`);
-    if (!el) return;
-
-    if (el.classList.contains('cml-change-insert')) {
-      // Keep inserted text: unwrap span
-      const parent = el.parentNode;
-      while (el.firstChild) {
-        parent?.insertBefore(el.firstChild, el);
-      }
-      parent?.removeChild(el);
-    } else if (el.classList.contains('cml-change-delete')) {
-      // Permanently remove deleted text
-      el.remove();
-    } else if (el.classList.contains('cml-change-format')) {
-      // Keep format, unwrap change tracking span
-      const parent = el.parentNode;
-      const formattedSpan = document.createElement('span');
-      if (el.getAttribute('style')) {
-        formattedSpan.setAttribute('style', el.getAttribute('style') || '');
-      }
-      while (el.firstChild) {
-        formattedSpan.appendChild(el.firstChild);
-      }
-      parent?.insertBefore(formattedSpan, el);
-      parent?.removeChild(el);
-    }
-
-    handleInput();
-  }
-
-  // Reject a Tracked Change
-  function handleRejectChange(changeId: string) {
-    if (!editorRef.current) return;
-    const el = editorRef.current.querySelector<HTMLElement>(`[data-change-id="${changeId}"]`);
-    if (!el) return;
-
-    if (el.classList.contains('cml-change-insert')) {
-      // Discard inserted text
-      el.remove();
-    } else if (el.classList.contains('cml-change-delete')) {
-      // Revert deleted text: unwrap span back to normal text
-      const parent = el.parentNode;
-      while (el.firstChild) {
-        parent?.insertBefore(el.firstChild, el);
-      }
-      parent?.removeChild(el);
-    } else if (el.classList.contains('cml-change-format')) {
-      // Strip formatting, unwrap
-      const parent = el.parentNode;
-      while (el.firstChild) {
-        parent?.insertBefore(el.firstChild, el);
-      }
-      parent?.removeChild(el);
-    }
-
-    handleInput();
-  }
-
-  // Accept All Changes
-  function handleAcceptAllChanges() {
-    if (!editorRef.current) return;
-    const changeElements = Array.from(
-      editorRef.current.querySelectorAll<HTMLElement>('.cml-change-item'),
-    );
-    changeElements.forEach((el) => {
-      const id = el.dataset.changeId;
-      if (id) handleAcceptChange(id);
-    });
-  }
-
-  // Reject All Changes
-  function handleRejectAllChanges() {
-    if (!editorRef.current) return;
-    const changeElements = Array.from(
-      editorRef.current.querySelectorAll<HTMLElement>('.cml-change-item'),
-    );
-    changeElements.forEach((el) => {
-      const id = el.dataset.changeId;
-      if (id) handleRejectChange(id);
-    });
   }
 
   // Select Change and scroll into view
@@ -598,7 +515,13 @@ export function DocumentEditorCanvas({
   }
 
   return (
-    <div className="flex flex-col rounded-2xl border border-ink-100 bg-white shadow-card overflow-hidden">
+    <div
+      className={`flex flex-col rounded-2xl border shadow-card overflow-hidden transition-colors ${
+        isDarkMode
+          ? 'border-zinc-800 bg-[#09090b] text-zinc-100'
+          : 'border-ink-100 bg-white text-ink-900'
+      }`}
+    >
       {/* Top Formatting & Controls Toolbar */}
       <DocumentEditorToolbar
         onCommand={handleCommand}
@@ -615,16 +538,22 @@ export function DocumentEditorCanvas({
         commentCount={comments.length}
         changeCount={trackedChanges.length}
         onOpenVersionHistory={onOpenVersionHistory}
+        isDarkMode={isDarkMode}
+        onToggleTheme={() => setIsDarkMode((prev) => !prev)}
       />
 
       {/* Find & Replace Banner */}
       {isFindOpen && (
         <div
           id="find-replace-banner"
-          className="flex flex-wrap items-center gap-2 border-b border-ink-100 bg-amber-50/70 px-4 py-2 text-xs text-ink-800 transition"
+          className={`flex flex-wrap items-center gap-2 border-b px-4 py-2 text-xs transition ${
+            isDarkMode
+              ? 'border-zinc-800 bg-zinc-900 text-zinc-200'
+              : 'border-ink-100 bg-amber-50/70 text-ink-800'
+          }`}
         >
           <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-ink-600">Find:</span>
+            <span className="font-semibold text-zinc-400">Find:</span>
             <input
               type="text"
               placeholder="Search contract text..."
@@ -634,43 +563,51 @@ export function DocumentEditorCanvas({
                 if (!e.target.value) setMatchCount(null);
               }}
               onKeyDown={(e) => e.key === 'Enter' && handleFind()}
-              className="rounded-md border border-ink-200 bg-white px-2 py-1 text-xs text-ink-900 focus:border-accent focus:outline-none"
+              className={`rounded-md border px-2 py-1 text-xs focus:border-accent focus:outline-none ${
+                isDarkMode
+                  ? 'border-zinc-700 bg-zinc-800 text-zinc-100 placeholder-zinc-500'
+                  : 'border-ink-200 bg-white text-ink-900'
+              }`}
             />
             <button
               type="button"
               onClick={handleFind}
-              className="rounded-md bg-ink-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-ink-900"
+              className="rounded-md bg-zinc-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-zinc-600"
             >
               Find
             </button>
             {matchCount !== null && (
-              <span className="text-[11px] font-medium text-ink-600">
+              <span className="text-[11px] font-medium text-zinc-400">
                 {matchCount} match{matchCount === 1 ? '' : 'es'}
               </span>
             )}
           </div>
 
           {!readOnly && (
-            <div className="flex items-center gap-1.5 border-l border-ink-200 pl-3">
-              <span className="font-semibold text-ink-600">Replace:</span>
+            <div className="flex items-center gap-1.5 border-l border-zinc-700 pl-3">
+              <span className="font-semibold text-zinc-400">Replace:</span>
               <input
                 type="text"
                 placeholder="Replacement text..."
                 value={replaceTerm}
                 onChange={(e) => setReplaceTerm(e.target.value)}
-                className="rounded-md border border-ink-200 bg-white px-2 py-1 text-xs text-ink-900 focus:border-accent focus:outline-none"
+                className={`rounded-md border px-2 py-1 text-xs focus:border-accent focus:outline-none ${
+                  isDarkMode
+                    ? 'border-zinc-700 bg-zinc-800 text-zinc-100 placeholder-zinc-500'
+                    : 'border-ink-200 bg-white text-ink-900'
+                }`}
               />
               <button
                 type="button"
                 onClick={handleReplace}
-                className="rounded-md border border-ink-200 bg-white px-2 py-1 text-xs font-semibold text-ink-800 hover:bg-slate-50"
+                className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-200 hover:bg-zinc-700"
               >
                 Replace
               </button>
               <button
                 type="button"
                 onClick={handleReplaceAll}
-                className="rounded-md border border-ink-200 bg-white px-2 py-1 text-xs font-semibold text-ink-800 hover:bg-slate-50"
+                className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-200 hover:bg-zinc-700"
               >
                 Replace All
               </button>
@@ -680,39 +617,47 @@ export function DocumentEditorCanvas({
           <button
             type="button"
             onClick={() => setIsFindOpen(false)}
-            className="ml-auto rounded p-1 text-ink-500 hover:bg-amber-100 hover:text-ink-800"
+            className="ml-auto rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
           >
             ✕
           </button>
         </div>
       )}
 
-      {/* Main Split Layout: Document Paper (Center) + Comments & Changes Gutter (Right) */}
-      <div className="flex flex-col lg:flex-row min-h-[620px] divide-y lg:divide-y-0 lg:divide-x divide-ink-100">
+      {/* Main Split Layout: Document Paper (Left/Center) + Review Rails (Middle Markup & Right Comments) */}
+      <div className="flex flex-col lg:flex-row min-h-[660px] divide-y lg:divide-y-0 lg:divide-x divide-zinc-800">
         {/* Document Canvas Container */}
-        <div className="flex-1 overflow-auto bg-slate-100/70 p-4 sm:p-6 lg:p-8 flex justify-center">
+        <div
+          className={`flex-1 overflow-auto p-4 sm:p-6 lg:p-8 flex justify-center ${
+            isDarkMode ? 'bg-[#121215]' : 'bg-slate-100/70'
+          }`}
+        >
           <div
             className="w-full transition-transform origin-top"
             style={{
               transform: `scale(${zoomLevel / 100})`,
-              maxWidth: '820px',
+              maxWidth: '840px',
             }}
           >
-            {/* Simulated 8.5 x 11 Page Layout */}
+            {/* Document Paper Layout */}
             <div
               id="contract-document-page"
               ref={pageRef}
-              className="relative min-h-[920px] rounded-xl border border-ink-200/90 bg-white p-8 sm:p-12 shadow-sm transition"
+              className={`relative min-h-[940px] rounded-xl border p-8 sm:p-12 shadow-sm transition ${
+                isDarkMode
+                  ? 'border-zinc-800/90 bg-[#18181c] text-zinc-100'
+                  : 'border-ink-200/90 bg-white text-ink-900'
+              }`}
             >
               {/* Document Header Line */}
-              <div className="mb-6 flex items-center justify-between border-b border-ink-100 pb-3 text-[11px] uppercase tracking-wider text-ink-400">
-                <span className="font-semibold text-ink-600">
+              <div className="mb-6 flex items-center justify-between border-b border-zinc-800/70 pb-3 text-[11px] uppercase tracking-wider text-zinc-500">
+                <span className="font-semibold text-zinc-400">
                   CLM Legal Workspace — Contract Document
                 </span>
                 <div className="flex items-center gap-2">
                   {trackChangesMode === 'suggesting' && (
-                    <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                      ⚡ Track Changes Mode
+                    <span className="rounded bg-red-950/40 px-2 py-0.5 text-[10px] font-bold text-red-400 border border-red-800/50">
+                      ⚡ Redline / Track Changes Active
                     </span>
                   )}
                   <span>Confidential</span>
@@ -739,12 +684,16 @@ export function DocumentEditorCanvas({
                   onKeyDown={handleKeyDown}
                   onMouseUp={captureSelection}
                   onKeyUp={captureSelection}
-                  className="editor-doc relative z-10 prose prose-slate max-w-none text-ink-900 focus:outline-none [&>blockquote]:border-l-4 [&>blockquote]:border-accent [&>blockquote]:bg-slate-50 [&>blockquote]:p-3 [&>h2]:mb-3 [&>h2]:mt-6 [&>h2]:font-serif [&>h2]:text-xl [&>h2]:font-bold [&>h2]:text-ink-950 [&>h3]:mb-2 [&>h3]:mt-4 [&>h3]:font-serif [&>h3]:text-base [&>h3]:font-semibold [&>h3]:text-ink-900 [&>p]:mb-3 [&>p]:leading-relaxed [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5"
+                  className={`editor-doc relative z-10 prose max-w-none focus:outline-none ${
+                    isDarkMode
+                      ? 'prose-invert text-zinc-100 [&>p]:leading-relaxed [&>p]:mb-4 font-sans text-sm'
+                      : 'prose-slate text-ink-900 [&>p]:leading-relaxed [&>p]:mb-4 font-sans text-sm'
+                  } [&>blockquote]:border-l-4 [&>blockquote]:border-blue-500 [&>blockquote]:p-3 [&>h2]:mb-3 [&>h2]:mt-6 [&>h2]:font-serif [&>h2]:text-xl [&>h2]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>h3]:font-serif [&>h3]:text-base [&>h3]:font-semibold`}
                 />
               </div>
 
               {/* Document Footer */}
-              <div className="mt-14 flex items-center justify-between border-t border-ink-100 pt-4 text-[11px] text-ink-400">
+              <div className="mt-14 flex items-center justify-between border-t border-zinc-800/70 pt-4 text-[11px] text-zinc-500">
                 <span>Acme Contracts Legal Repository</span>
                 <span>Page 1 of 1</span>
               </div>
@@ -752,7 +701,7 @@ export function DocumentEditorCanvas({
           </div>
         </div>
 
-        {/* Right Margin Review Rail (Always Visible Beside the Document Clauses) */}
+        {/* Right Margin Review Rail (Markup/Formatting + Comments from Screenshot, without Accept/Reject) */}
         <DocumentReviewMargin
           comments={comments}
           activeCommentId={activeQuoteId}
@@ -774,21 +723,20 @@ export function DocumentEditorCanvas({
           trackedChanges={trackedChanges}
           activeChangeId={activeChangeId}
           onSelectChange={handleSelectChange}
-          onAcceptChange={handleAcceptChange}
-          onRejectChange={handleRejectChange}
-          onAcceptAllChanges={handleAcceptAllChanges}
-          onRejectAllChanges={handleRejectAllChanges}
           trackChangesMode={trackChangesMode}
           onChangeTrackChangesMode={setTrackChangesMode}
           readOnly={readOnly}
-          currentUserId={currentUserId}
         />
       </div>
 
       {/* Bottom Status & Metrics Bar */}
       <div
         id="editor-status-bar"
-        className="flex flex-wrap items-center justify-between gap-3 border-t border-ink-100 bg-slate-50 px-4 py-2.5 text-xs text-ink-600"
+        className={`flex flex-wrap items-center justify-between gap-3 border-t px-4 py-2 text-xs ${
+          isDarkMode
+            ? 'border-zinc-800 bg-[#0d0d10] text-zinc-400'
+            : 'border-ink-100 bg-slate-50 text-ink-600'
+        }`}
       >
         {/* Left: Autosave & Mode indicator */}
         <div className="flex items-center gap-3">
@@ -796,15 +744,15 @@ export function DocumentEditorCanvas({
             {autosaveStatus === 'saving' && (
               <>
                 <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
-                <span className="text-amber-700 font-medium">Autosaving draft...</span>
+                <span className="text-amber-500 font-medium">Autosaving draft...</span>
               </>
             )}
             {autosaveStatus === 'saved' && (
               <>
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span className="text-emerald-700 font-medium">Draft autosaved</span>
+                <span className="text-emerald-500 font-medium">Draft autosaved</span>
                 {lastSavedAt && (
-                  <span className="text-ink-400">
+                  <span className="text-zinc-500">
                     (
                     {new Date(lastSavedAt).toLocaleTimeString([], {
                       hour: '2-digit',
@@ -817,25 +765,25 @@ export function DocumentEditorCanvas({
             )}
             {autosaveStatus === 'unsaved' && (
               <>
-                <span className="h-2 w-2 rounded-full bg-slate-400" />
-                <span className="text-ink-500">Unsaved changes (Ctrl+S to commit version)</span>
+                <span className="h-2 w-2 rounded-full bg-zinc-500" />
+                <span className="text-zinc-400">Unsaved changes (Ctrl+S to save new version)</span>
               </>
             )}
           </div>
 
-          <div className="h-3 w-px bg-ink-200 hidden sm:block" />
+          <div className="h-3 w-px bg-zinc-700 hidden sm:block" />
 
-          <div className="text-[11px] font-semibold text-ink-500 hidden sm:block">
+          <div className="text-[11px] font-semibold text-zinc-400 hidden sm:block">
             Mode:{' '}
             <span
               className={
                 trackChangesMode === 'suggesting'
-                  ? 'text-emerald-700 font-bold'
-                  : 'text-ink-800'
+                  ? 'text-red-400 font-bold'
+                  : 'text-zinc-200'
               }
             >
               {trackChangesMode === 'suggesting'
-                ? '⚡ Suggesting (Track Changes)'
+                ? '⚡ Redline / Track Changes'
                 : trackChangesMode === 'viewing'
                 ? 'Viewing'
                 : 'Editing'}
@@ -844,18 +792,18 @@ export function DocumentEditorCanvas({
         </div>
 
         {/* Right: Metrics & Zoom */}
-        <div className="flex items-center gap-4 text-ink-500">
+        <div className="flex items-center gap-4 text-zinc-400">
           <span>{wordCount} words</span>
           <span>{charCount} characters</span>
           <span>~{Math.max(1, Math.ceil(wordCount / 200))} min read</span>
 
           {/* Zoom controls */}
-          <div className="flex items-center gap-1 border-l border-ink-200 pl-3">
+          <div className="flex items-center gap-1 border-l border-zinc-700 pl-3">
             <button
               type="button"
               title="Zoom out"
               onClick={() => setZoomLevel((z) => Math.max(70, z - 10))}
-              className="rounded px-1.5 py-0.5 hover:bg-ink-100 hover:text-ink-900"
+              className="rounded px-1.5 py-0.5 hover:bg-zinc-800 hover:text-zinc-100"
             >
               −
             </button>
@@ -864,7 +812,7 @@ export function DocumentEditorCanvas({
               type="button"
               title="Zoom in"
               onClick={() => setZoomLevel((z) => Math.min(130, z + 10))}
-              className="rounded px-1.5 py-0.5 hover:bg-ink-100 hover:text-ink-900"
+              className="rounded px-1.5 py-0.5 hover:bg-zinc-800 hover:text-zinc-100"
             >
               +
             </button>
@@ -878,7 +826,7 @@ export function DocumentEditorCanvas({
           {notifications.map((notif) => (
             <div
               key={notif.id}
-              className="pointer-events-auto flex items-center gap-2 rounded-xl border border-ink-100 bg-white/95 px-4 py-2.5 text-xs font-semibold text-ink-900 shadow-xl backdrop-blur transition"
+              className="pointer-events-auto flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900/95 px-4 py-2.5 text-xs font-semibold text-zinc-100 shadow-xl backdrop-blur transition"
             >
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>{notif.message}</span>
@@ -886,7 +834,7 @@ export function DocumentEditorCanvas({
                 <button
                   type="button"
                   onClick={() => onDismissNotification(notif.id)}
-                  className="ml-2 text-ink-400 hover:text-ink-700"
+                  className="ml-2 text-zinc-400 hover:text-zinc-200"
                 >
                   ✕
                 </button>

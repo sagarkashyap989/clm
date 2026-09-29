@@ -17,6 +17,8 @@ type DocumentEditorToolbarProps = {
   commentCount?: number;
   changeCount?: number;
   onOpenVersionHistory?: () => void;
+  isDarkMode?: boolean;
+  onToggleTheme?: () => void;
 };
 
 export function DocumentEditorToolbar({
@@ -34,6 +36,8 @@ export function DocumentEditorToolbar({
   commentCount = 0,
   changeCount = 0,
   onOpenVersionHistory,
+  isDarkMode = true,
+  onToggleTheme,
 }: DocumentEditorToolbarProps) {
   function handleButtonClick(e: MouseEvent, command: string, value?: string) {
     e.preventDefault();
@@ -44,12 +48,16 @@ export function DocumentEditorToolbar({
   return (
     <div
       id="document-editor-toolbar"
-      className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-1.5 rounded-t-2xl border-b border-ink-100 bg-slate-50/95 px-3 py-2 backdrop-blur sm:px-4"
+      className={`sticky top-0 z-20 flex flex-wrap items-center justify-between gap-1.5 rounded-t-2xl border-b px-3 py-2 backdrop-blur sm:px-4 transition-colors ${
+        isDarkMode
+          ? 'border-zinc-800 bg-[#121215]/95 text-zinc-200'
+          : 'border-ink-100 bg-slate-50/95 text-ink-900'
+      }`}
     >
       {/* Left Formatting Tools */}
       <div className="flex flex-wrap items-center gap-1">
         {/* Headings / Block Dropdown */}
-        <div className="flex items-center gap-1 border-r border-ink-150 pr-2">
+        <div className={`flex items-center gap-1 border-r pr-2 ${isDarkMode ? 'border-zinc-700' : 'border-ink-150'}`}>
           <select
             aria-label="Format block level"
             disabled={readOnly}
@@ -57,7 +65,11 @@ export function DocumentEditorToolbar({
               const val = e.target.value;
               onCommand('formatBlock', val);
             }}
-            className="rounded-lg border border-ink-200 bg-white px-2 py-1 text-xs font-semibold text-ink-900 shadow-2xs focus:border-accent focus:outline-none disabled:opacity-50"
+            className={`rounded-lg border px-2 py-1 text-xs font-semibold focus:outline-none disabled:opacity-50 ${
+              isDarkMode
+                ? 'border-zinc-700 bg-zinc-800 text-zinc-100 focus:border-blue-400'
+                : 'border-ink-200 bg-white text-ink-900 focus:border-accent'
+            }`}
           >
             <option value="<p>">Normal Text</option>
             <option value="<h2>">Heading 1</option>
@@ -68,13 +80,17 @@ export function DocumentEditorToolbar({
         </div>
 
         {/* Bold, Italic, Underline, Strikethrough */}
-        <div className="flex items-center gap-0.5 border-r border-ink-150 pr-2">
+        <div className={`flex items-center gap-0.5 border-r pr-2 ${isDarkMode ? 'border-zinc-700' : 'border-ink-150'}`}>
           <button
             type="button"
             title="Bold (Ctrl+B)"
             disabled={readOnly}
             onClick={(e) => handleButtonClick(e, 'bold')}
-            className="rounded p-1.5 font-bold text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+            className={`rounded p-1.5 font-bold disabled:opacity-50 ${
+              isDarkMode
+                ? 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'text-ink-700 hover:bg-white hover:text-ink-950'
+            }`}
           >
             <span className="font-serif text-sm">B</span>
           </button>
@@ -83,7 +99,11 @@ export function DocumentEditorToolbar({
             title="Italic (Ctrl+I)"
             disabled={readOnly}
             onClick={(e) => handleButtonClick(e, 'italic')}
-            className="rounded p-1.5 italic text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+            className={`rounded p-1.5 italic disabled:opacity-50 ${
+              isDarkMode
+                ? 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'text-ink-700 hover:bg-white hover:text-ink-950'
+            }`}
           >
             <span className="font-serif text-sm">I</span>
           </button>
@@ -92,7 +112,11 @@ export function DocumentEditorToolbar({
             title="Underline (Ctrl+U)"
             disabled={readOnly}
             onClick={(e) => handleButtonClick(e, 'underline')}
-            className="rounded p-1.5 underline text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+            className={`rounded p-1.5 underline disabled:opacity-50 ${
+              isDarkMode
+                ? 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'text-ink-700 hover:bg-white hover:text-ink-950'
+            }`}
           >
             <span className="font-serif text-sm">U</span>
           </button>
@@ -101,20 +125,28 @@ export function DocumentEditorToolbar({
             title="Strikethrough"
             disabled={readOnly}
             onClick={(e) => handleButtonClick(e, 'strikeThrough')}
-            className="rounded p-1.5 line-through text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+            className={`rounded p-1.5 line-through disabled:opacity-50 ${
+              isDarkMode
+                ? 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'text-ink-700 hover:bg-white hover:text-ink-950'
+            }`}
           >
             <span className="font-serif text-sm">S</span>
           </button>
         </div>
 
         {/* Lists & Indent */}
-        <div className="flex items-center gap-0.5 border-r border-ink-150 pr-2">
+        <div className={`flex items-center gap-0.5 border-r pr-2 ${isDarkMode ? 'border-zinc-700' : 'border-ink-150'}`}>
           <button
             type="button"
             title="Bullet List"
             disabled={readOnly}
             onClick={(e) => handleButtonClick(e, 'insertUnorderedList')}
-            className="rounded p-1.5 text-xs text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+            className={`rounded p-1.5 text-xs disabled:opacity-50 ${
+              isDarkMode
+                ? 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'text-ink-700 hover:bg-white hover:text-ink-950'
+            }`}
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16M2 6h.01M2 12h.01M2 18h.01" />
@@ -125,7 +157,11 @@ export function DocumentEditorToolbar({
             title="Numbered List"
             disabled={readOnly}
             onClick={(e) => handleButtonClick(e, 'insertOrderedList')}
-            className="rounded p-1.5 text-xs text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+            className={`rounded p-1.5 text-xs disabled:opacity-50 ${
+              isDarkMode
+                ? 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'text-ink-700 hover:bg-white hover:text-ink-950'
+            }`}
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 6h13M7 12h13M7 18h13M3 6h.01M3 12h.01M3 18h.01" />
@@ -134,13 +170,17 @@ export function DocumentEditorToolbar({
         </div>
 
         {/* Alignment */}
-        <div className="flex items-center gap-0.5 border-r border-ink-150 pr-2">
+        <div className={`flex items-center gap-0.5 border-r pr-2 ${isDarkMode ? 'border-zinc-700' : 'border-ink-150'}`}>
           <button
             type="button"
             title="Align Left"
             disabled={readOnly}
             onClick={(e) => handleButtonClick(e, 'justifyLeft')}
-            className="rounded p-1.5 text-xs text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+            className={`rounded p-1.5 text-xs disabled:opacity-50 ${
+              isDarkMode
+                ? 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'text-ink-700 hover:bg-white hover:text-ink-950'
+            }`}
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h10M4 18h14" />
@@ -151,7 +191,11 @@ export function DocumentEditorToolbar({
             title="Align Center"
             disabled={readOnly}
             onClick={(e) => handleButtonClick(e, 'justifyCenter')}
-            className="rounded p-1.5 text-xs text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+            className={`rounded p-1.5 text-xs disabled:opacity-50 ${
+              isDarkMode
+                ? 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'text-ink-700 hover:bg-white hover:text-ink-950'
+            }`}
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M7 12h10M5 18h14" />
@@ -162,7 +206,11 @@ export function DocumentEditorToolbar({
             title="Align Right"
             disabled={readOnly}
             onClick={(e) => handleButtonClick(e, 'justifyRight')}
-            className="rounded p-1.5 text-xs text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+            className={`rounded p-1.5 text-xs disabled:opacity-50 ${
+              isDarkMode
+                ? 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'text-ink-700 hover:bg-white hover:text-ink-950'
+            }`}
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M10 12h10M6 18h14" />
@@ -171,13 +219,17 @@ export function DocumentEditorToolbar({
         </div>
 
         {/* Undo / Redo */}
-        <div className="flex items-center gap-0.5 border-r border-ink-150 pr-2">
+        <div className={`flex items-center gap-0.5 border-r pr-2 ${isDarkMode ? 'border-zinc-700' : 'border-ink-150'}`}>
           <button
             type="button"
             title="Undo (Ctrl+Z)"
             disabled={readOnly}
             onClick={(e) => handleButtonClick(e, 'undo')}
-            className="rounded p-1.5 text-xs text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+            className={`rounded p-1.5 text-xs disabled:opacity-50 ${
+              isDarkMode
+                ? 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'text-ink-700 hover:bg-white hover:text-ink-950'
+            }`}
           >
             ↺
           </button>
@@ -186,7 +238,11 @@ export function DocumentEditorToolbar({
             title="Redo (Ctrl+Y)"
             disabled={readOnly}
             onClick={(e) => handleButtonClick(e, 'redo')}
-            className="rounded p-1.5 text-xs text-ink-700 hover:bg-white hover:text-ink-950 disabled:opacity-50"
+            className={`rounded p-1.5 text-xs disabled:opacity-50 ${
+              isDarkMode
+                ? 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                : 'text-ink-700 hover:bg-white hover:text-ink-950'
+            }`}
           >
             ↻
           </button>
@@ -206,27 +262,30 @@ export function DocumentEditorToolbar({
               }
               className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold transition shadow-2xs ${
                 trackChangesMode === 'suggesting'
-                  ? 'bg-emerald-600 text-white shadow-emerald-200'
+                  ? 'bg-red-600 text-white'
+                  : isDarkMode
+                  ? 'border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                   : 'border border-ink-200 bg-white text-ink-700 hover:bg-slate-50'
               }`}
             >
-              <span>{trackChangesMode === 'suggesting' ? '⚡ Track Changes ON' : 'Track Changes'}</span>
+              <span>{trackChangesMode === 'suggesting' ? '⚡ Redline Active' : 'Track Changes'}</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* Right Controls: Navigation, Comments, Find, Revision History */}
+      {/* Right Controls: Navigation, Comments, Find, Theme, Revision History */}
       <div className="flex items-center gap-1.5">
-        {/* Navigation jump shortcuts */}
         {onPrevChange && onNextChange && changeCount > 0 && (
-          <div className="hidden sm:flex items-center gap-0.5 rounded-lg border border-ink-200 bg-white px-1 py-0.5 text-xs text-ink-700">
-            <span className="text-[10px] text-ink-500 font-semibold px-1">Changes:</span>
+          <div className={`hidden sm:flex items-center gap-0.5 rounded-lg border px-1 py-0.5 text-xs ${
+            isDarkMode ? 'border-zinc-700 bg-zinc-800 text-zinc-300' : 'border-ink-200 bg-white text-ink-700'
+          }`}>
+            <span className="text-[10px] opacity-75 font-semibold px-1">Revisions:</span>
             <button
               type="button"
               onClick={onPrevChange}
               title="Previous change"
-              className="rounded px-1 hover:bg-slate-100 font-bold"
+              className="rounded px-1 hover:opacity-75 font-bold"
             >
               ◄
             </button>
@@ -234,7 +293,7 @@ export function DocumentEditorToolbar({
               type="button"
               onClick={onNextChange}
               title="Next change"
-              className="rounded px-1 hover:bg-slate-100 font-bold"
+              className="rounded px-1 hover:opacity-75 font-bold"
             >
               ►
             </button>
@@ -242,23 +301,25 @@ export function DocumentEditorToolbar({
         )}
 
         {onPrevComment && onNextComment && commentCount > 0 && (
-          <div className="hidden sm:flex items-center gap-0.5 rounded-lg border border-ink-200 bg-white px-1 py-0.5 text-xs text-ink-700">
-            <span className="text-[10px] text-ink-500 font-semibold px-1">Comments:</span>
+          <div className={`hidden sm:flex items-center gap-0.5 rounded-lg border px-1 py-0.5 text-xs ${
+            isDarkMode ? 'border-zinc-700 bg-zinc-800 text-zinc-300' : 'border-ink-200 bg-white text-ink-700'
+          }`}>
+            <span className="text-[10px] opacity-75 font-semibold px-1">Comments:</span>
             <button
               type="button"
               onClick={onPrevComment}
               title="Previous comment"
-              className="rounded px-1 hover:bg-slate-100 font-bold"
+              className="rounded px-1 hover:opacity-75 font-bold"
             >
-              ◄
+              ▲
             </button>
             <button
               type="button"
               onClick={onNextComment}
               title="Next comment"
-              className="rounded px-1 hover:bg-slate-100 font-bold"
+              className="rounded px-1 hover:opacity-75 font-bold"
             >
-              ►
+              ▼
             </button>
           </div>
         )}
@@ -269,7 +330,11 @@ export function DocumentEditorToolbar({
             title="Comment on selected text (Ctrl+M)"
             disabled={readOnly}
             onClick={onCommentSelection}
-            className="flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2.5 py-1 text-xs font-semibold text-ink-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50"
+            className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold shadow-2xs disabled:opacity-50 ${
+              isDarkMode
+                ? 'border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
+                : 'border-ink-200 bg-white text-ink-700 hover:bg-slate-50'
+            }`}
           >
             <span>💬</span>
             <span className="hidden sm:inline">Add Comment</span>
@@ -281,7 +346,11 @@ export function DocumentEditorToolbar({
             type="button"
             title="Revision History"
             onClick={onOpenVersionHistory}
-            className="flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2.5 py-1 text-xs font-semibold text-ink-700 shadow-2xs hover:bg-slate-50"
+            className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold shadow-2xs ${
+              isDarkMode
+                ? 'border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
+                : 'border-ink-200 bg-white text-ink-700 hover:bg-slate-50'
+            }`}
           >
             <span>⏱</span>
             <span className="hidden sm:inline">Revisions</span>
@@ -295,12 +364,29 @@ export function DocumentEditorToolbar({
           onClick={onToggleFind}
           className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
             isFindOpen
-              ? 'bg-accent text-white shadow-2xs'
-              : 'border border-ink-200 bg-white text-ink-700 shadow-2xs hover:bg-slate-50'
+              ? 'bg-blue-600 text-white shadow-2xs'
+              : isDarkMode
+              ? 'border border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
+              : 'border border-ink-200 bg-white text-ink-700 hover:bg-slate-50'
           }`}
         >
           Find / Replace
         </button>
+
+        {onToggleTheme && (
+          <button
+            type="button"
+            title={isDarkMode ? 'Switch to light paper' : 'Switch to dark review mode'}
+            onClick={onToggleTheme}
+            className={`rounded-lg border px-2 py-1 text-xs font-semibold transition ${
+              isDarkMode
+                ? 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                : 'border-ink-200 bg-white text-ink-700 hover:bg-slate-50'
+            }`}
+          >
+            {isDarkMode ? '☀️ Light' : '🌙 Dark'}
+          </button>
+        )}
       </div>
     </div>
   );
