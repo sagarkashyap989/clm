@@ -8,6 +8,7 @@ import {
   useMemo,
 } from 'react';
 import { DocumentEditorToolbar } from './DocumentEditorToolbar';
+import { getUserColor } from '@/lib/userColor';
 import { rangeForQuote, type QuotedPassage } from './quoteHighlight';
 import { CollaboratorCursors } from './collaboration/CollaboratorCursors';
 import { DocumentReviewMargin } from './DocumentReviewMargin';
@@ -19,31 +20,6 @@ import type {
   TrackedChange,
   TrackedChangeType,
 } from '@cml/shared';
-
-export function getUserColor(userId?: string): string {
-  if (!userId) return '#2563eb';
-  if (userId === 'usr_demo' || userId === 'usr_admin') return '#2563eb'; // Royal Blue
-  if (userId === 'usr_2' || userId.includes('sakshi')) return '#ef4444'; // Red
-  if (userId === 'usr_dsk' || userId.includes('dsk')) return '#9333ea'; // Purple
-  if (userId === 'usr_3' || userId.includes('john')) return '#10b981'; // Emerald
-  if (userId === 'usr_viewer') return '#f59e0b'; // Amber
-
-  const PALETTE = [
-    '#2563eb',
-    '#ef4444',
-    '#9333ea',
-    '#10b981',
-    '#f59e0b',
-    '#06b6d4',
-    '#ec4899',
-    '#8b5cf6',
-  ];
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
-  }
-  return PALETTE[hash % PALETTE.length];
-}
 
 type DocumentEditorCanvasProps = {
   initialContent: string;
@@ -92,21 +68,12 @@ function parseTrackedChangesFromDom(root: HTMLElement): TrackedChange[] {
 
     const authorId =
       el.dataset.authorId ||
-      (el.dataset.authorName === 'DSK Legal'
-        ? 'usr_dsk'
-        : el.dataset.authorName === 'Sakshi Soni'
-        ? 'usr_2'
-        : 'usr_demo');
+      (el.dataset.authorName
+        ? `usr_${el.dataset.authorName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`
+        : 'usr_collab');
 
-    const authorName =
-      el.dataset.authorName ||
-      (authorId === 'usr_dsk'
-        ? 'DSK Legal'
-        : authorId === 'usr_2'
-        ? 'Sakshi Soni'
-        : 'Administrator');
-
-    const authorColor = el.dataset.authorColor || getUserColor(authorId);
+    const authorName = el.dataset.authorName || 'Collaborator';
+    const authorColor = el.dataset.authorColor || getUserColor(authorId || authorName);
 
     // Apply inline style so each user's edits visually appear in their unique color
     if (!el.style.color || el.style.color === '') {

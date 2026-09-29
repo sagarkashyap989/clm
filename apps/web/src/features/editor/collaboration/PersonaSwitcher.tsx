@@ -1,5 +1,6 @@
 import { useState, type FC } from 'react';
 import { useAuthStore } from '@/stores/auth';
+import { getUserColor } from '@/lib/userColor';
 
 const DEMO_PERSONAS = [
   {
@@ -7,35 +8,35 @@ const DEMO_PERSONAS = [
     name: 'Administrator',
     email: 'admin@example.com',
     role: 'admin',
-    color: '#2563eb', // Royal Blue
+    color: getUserColor('usr_demo'),
   },
   {
     id: 'usr_2',
     name: 'Sakshi Soni',
     email: 'sakshi@example.com',
     role: 'legal_counsel',
-    color: '#ef4444', // Red / Coral
+    color: getUserColor('usr_2'),
   },
   {
     id: 'usr_dsk',
     name: 'DSK Legal',
     email: 'dsk@example.com',
     role: 'external_counsel',
-    color: '#9333ea', // Purple
+    color: getUserColor('usr_dsk'),
   },
   {
     id: 'usr_3',
     name: 'John Doe',
     email: 'john@example.com',
     role: 'member',
-    color: '#10b981', // Emerald
+    color: getUserColor('usr_3'),
   },
   {
     id: 'usr_viewer',
     name: 'Auditor View-Only',
     email: 'viewer@example.com',
     role: 'viewer',
-    color: '#64748b', // Slate
+    color: getUserColor('usr_viewer'),
   },
 ];
 
@@ -53,7 +54,7 @@ export const PersonaSwitcher: FC<PersonaSwitcherProps> = ({ onSwitchPersona }) =
       name: user?.name || 'Administrator',
       email: user?.email || 'admin@example.com',
       role: 'admin',
-      color: '#059669',
+      color: getUserColor(user?.id || user?.name || user?.email),
     };
 
   function selectPersona(persona: (typeof DEMO_PERSONAS)[0]) {

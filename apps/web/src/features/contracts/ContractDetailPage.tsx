@@ -27,6 +27,7 @@ import { CollaborationStatus } from '../editor/collaboration/CollaborationStatus
 import { PresenceAvatars } from '../editor/collaboration/PresenceAvatars';
 import { PersonaSwitcher } from '../editor/collaboration/PersonaSwitcher';
 import { useAuthStore } from '@/stores/auth';
+import { getUserColor } from '@/lib/userColor';
 import type {
   ContractComment,
   ContractChatMessage,
@@ -160,12 +161,8 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
   const messagesCount = chatData?.messages?.length ?? 0;
 
   const currentUserColor = useMemo(() => {
-    if (user?.id === 'usr_2' || user?.id?.includes('sakshi')) return '#ef4444';
-    if (user?.id === 'usr_dsk' || user?.id?.includes('dsk')) return '#9333ea';
-    if (user?.id === 'usr_3' || user?.id?.includes('john')) return '#10b981';
-    if (user?.id === 'usr_viewer') return '#f59e0b';
-    return '#2563eb';
-  }, [user?.id]);
+    return getUserColor(user?.id || user?.name || user?.email);
+  }, [user?.id, user?.name, user?.email]);
 
   // Decide initial editor content: draft content > latest version content > fallback template
   useEffect(() => {
