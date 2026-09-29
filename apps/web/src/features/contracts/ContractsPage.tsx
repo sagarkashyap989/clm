@@ -389,8 +389,20 @@ export function ContractsPage() {
                           title={c.originalFile.fileName}
                           className="inline-flex items-center gap-1 text-xs text-ink-700"
                         >
-                          <span className="font-mono text-[10px] font-bold text-accent">
-                            {c.originalFile.fileName.endsWith('.pdf') ? 'PDF' : 'DOC'}
+                          <span
+                            className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-bold ${
+                              c.originalFile.fileName.toLowerCase().endsWith('.docx')
+                                ? 'bg-[#185ABD] text-white'
+                                : c.originalFile.fileName.toLowerCase().endsWith('.pdf')
+                                ? 'bg-rose-100 text-rose-700'
+                                : 'bg-slate-100 text-ink-700'
+                            }`}
+                          >
+                            {c.originalFile.fileName.toLowerCase().endsWith('.docx')
+                              ? 'DOCX'
+                              : c.originalFile.fileName.toLowerCase().endsWith('.pdf')
+                              ? 'PDF'
+                              : 'DOC'}
                           </span>
                           <span className="max-w-[100px] truncate">
                             {c.originalFile.fileName}

@@ -200,13 +200,25 @@ export function UploadContractModal({
               />
               {file ? (
                 <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-sm font-bold text-white">
-                    {file.name.endsWith('.pdf') ? 'PDF' : 'DOC'}
+                  <span
+                    className={`flex h-10 w-10 items-center justify-center rounded-lg text-xs font-bold text-white shadow-xs ${
+                      file.name.toLowerCase().endsWith('.docx')
+                        ? 'bg-[#185ABD]'
+                        : file.name.toLowerCase().endsWith('.pdf')
+                        ? 'bg-rose-600'
+                        : 'bg-emerald-600'
+                    }`}
+                  >
+                    {file.name.toLowerCase().endsWith('.docx')
+                      ? 'DOCX'
+                      : file.name.toLowerCase().endsWith('.pdf')
+                      ? 'PDF'
+                      : 'TXT'}
                   </span>
                   <div className="text-left">
                     <p className="text-sm font-semibold text-ink-900">{file.name}</p>
                     <p className="text-xs text-ink-500">
-                      {(file.size / 1024).toFixed(1)} KB • Ready to upload
+                      {(file.size / 1024).toFixed(1)} KB • {file.name.toLowerCase().endsWith('.docx') ? 'Microsoft Word Document' : 'Ready to upload'}
                     </p>
                   </div>
                   <button

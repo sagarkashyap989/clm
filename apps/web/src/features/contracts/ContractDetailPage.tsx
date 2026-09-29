@@ -9,62 +9,33 @@ import {
   type ContractStatus,
   type DocumentVersion,
 } from '@cml/shared';
-import { api, downloadFile } from '@/lib/api';
+import { api } from '@/lib/api';
 import { getStatusBadgeClass, type ContractItem } from './ContractsPage';
 import { DocumentEditorCanvas } from '../editor/DocumentEditorCanvas';
 import { PdfDocumentViewer } from '../editor/PdfDocumentViewer';
+import { OfficeWordEditor } from '../editor/OfficeWordEditor';
+import { exportContractToDocx } from '../editor/WordExportHelper';
 import { VersionHistoryDrawer } from '../editor/VersionHistoryDrawer';
 import { SaveVersionModal } from '../editor/SaveVersionModal';
 import { VersionCompareModal } from '../editor/VersionCompareModal';
 import { ShareContractModal } from '../collaboration/ShareContractModal';
 import { ContractCommentsPanel } from '../collaboration/ContractCommentsPanel';
 import { ContractChatPanel } from '../collaboration/ContractChatPanel';
-import {
-  CollaborationProvider,
-  useCollaboration,
-} from '../editor/collaboration/CollaborationProvider';
-import { CollaborationStatus } from '../editor/collaboration/CollaborationStatus';
-import { PresenceAvatars } from '../editor/collaboration/PresenceAvatars';
-import { PersonaSwitcher } from '../editor/collaboration/PersonaSwitcher';
-import { useAuthStore } from '@/stores/auth';
-import type {
-  ContractComment,
-  ContractChatMessage,
-  DocumentPatch,
-  VersionRestoreBroadcast,
-  RoomSyncPayload,
-} from '@cml/shared';
+import type { ContractComment, ContractChatMessage } from '@cml/shared';
 
 type TabType = 'workspace' | 'comments' | 'chat' | 'versions' | 'details';
 
-function ContractDetailContent({ contractId }: { contractId: string }) {
+export function ContractDetailPage() {
+  const { contractId } = useParams<{ contractId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const { user } = useAuthStore();
-  const {
-    status: collabStatus,
-    activeUsers,
-    canEdit: collabCanEdit,
-    sendEdit,
-    sendCursor,
-    sendSelection,
-    restoreVersion: broadcastVersionRestore,
-    notifications,
-    dismissNotification,
-    errorMessage: collabError,
-    setOnRemotePatch,
-    setOnVersionRestored,
-    setOnInitialSync,
-    retryConnection,
-  } = useCollaboration();
 
   const [activeTab, setActiveTab] = useState<TabType>('workspace');
   const [editorContent, setEditorContent] = useState<string>('');
   const [autosaveStatus, setAutosaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'editor' | 'pdf'>('editor');
-  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'editor' | 'word' | 'pdf'>('editor');
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
   // Modals state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -84,35 +55,6 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
 
   // Autosave timer ref
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Collaboration Event Listeners (Remote Edits, Restorations, Catch-Up)
-  useEffect(() => {
-    setOnRemotePatch((patch: DocumentPatch) => {
-      setEditorContent(patch.content);
-      setAutosaveStatus('saved');
-    });
-
-    setOnVersionRestored((broadcast: VersionRestoreBroadcast) => {
-      setEditorContent(broadcast.content);
-      setAutosaveStatus('saved');
-      queryClient.invalidateQueries({ queryKey: ['contract-versions', contractId] });
-      queryClient.invalidateQueries({ queryKey: ['contract', contractId] });
-      setActiveTab('workspace');
-    });
-
-    setOnInitialSync((payload: RoomSyncPayload) => {
-      if (payload.content) {
-        setEditorContent(payload.content);
-        setAutosaveStatus('saved');
-      }
-    });
-
-    return () => {
-      setOnRemotePatch(null);
-      setOnVersionRestored(null);
-      setOnInitialSync(null);
-    };
-  }, [setOnRemotePatch, setOnVersionRestored, setOnInitialSync, queryClient, contractId]);
 
   // 1. Fetch Contract Data
   const {
@@ -208,13 +150,10 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
     },
   });
 
-  // Handle Editor Content Change with Debounced Autosave & Live Broadcast
+  // Handle Editor Content Change with Debounced Autosave
   function handleContentChange(newHtml: string) {
     setEditorContent(newHtml);
     setAutosaveStatus('unsaved');
-
-    // Broadcast edit immediately to room peers
-    sendEdit(newHtml);
 
     if (autosaveTimeoutRef.current) {
       clearTimeout(autosaveTimeoutRef.current);
@@ -288,11 +227,7 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
         }),
       });
     },
-    onSuccess: (_, variables) => {
-      const restored = versions.find((v) => v.id === variables.versionId);
-      if (restored?.editorContent) {
-        broadcastVersionRestore(variables.versionNumber, restored.editorContent);
-      }
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contract-versions', contractId] });
       queryClient.invalidateQueries({ queryKey: ['contract', contractId] });
       setActiveTab('workspace');
@@ -371,6 +306,88 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
 
         {/* Global Action Bar */}
         <div className="flex items-center gap-2">
+          {/* Word & Export Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsExportMenuOpen((prev) => !prev)}
+              className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 shadow-xs hover:bg-slate-50 transition"
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded bg-[#185ABD] text-[9px] font-black text-white">
+                W
+              </span>
+              <span>Export & Word</span>
+              <span className="text-[10px] text-ink-400">▾</span>
+            </button>
+
+            {isExportMenuOpen && (
+              <div
+                className="absolute right-0 top-full mt-1.5 z-40 w-60 rounded-xl border border-ink-100 bg-white p-1.5 shadow-xl text-xs text-ink-800"
+                onMouseLeave={() => setIsExportMenuOpen(false)}
+              >
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsExportMenuOpen(false);
+                    await exportContractToDocx({
+                      contractName: contract.name,
+                      counterparty: contract.counterparty,
+                      contractType: contract.type,
+                      status: contract.status,
+                      contentHtml: editorContent,
+                      effectiveDate: contract.startDate,
+                      expirationDate: contract.endDate,
+                    });
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-slate-50 text-left font-medium transition"
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded bg-[#185ABD] text-xs font-bold text-white shrink-0">
+                    W
+                  </span>
+                  <div>
+                    <p className="font-semibold text-ink-950">Export as Word (.docx)</p>
+                    <p className="text-[10px] text-ink-500">Standard Microsoft Word file</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsExportMenuOpen(false);
+                    setActiveTab('workspace');
+                    setViewMode('word');
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-slate-50 text-left font-medium transition"
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded bg-slate-100 text-xs shrink-0">
+                    🖥️
+                  </span>
+                  <div>
+                    <p className="font-semibold text-ink-950">Open in Word Online</p>
+                    <p className="text-[10px] text-ink-500">Live Office 365 Ribbon Editor</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsExportMenuOpen(false);
+                    window.print();
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-slate-50 text-left font-medium transition"
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded bg-slate-100 text-xs shrink-0">
+                    🖨️
+                  </span>
+                  <div>
+                    <p className="font-semibold text-ink-950">Print / Export PDF</p>
+                    <p className="text-[10px] text-ink-500">Browser print & vector PDF</p>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={() => handleOpenCompare()}
@@ -388,26 +405,6 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
           >
             Save New Version (v{currentVersionNumber + 1}.0)
           </button>
-        </div>
-      </div>
-
-      {/* Real-Time Multi-User Collaboration & Presence Strip */}
-      <div
-        id="realtime-collaboration-strip"
-        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink-100 bg-white px-5 py-3 shadow-xs"
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <CollaborationStatus
-            status={collabStatus}
-            onRetry={retryConnection}
-            errorMessage={collabError}
-          />
-          <div className="hidden sm:block h-4 w-px bg-ink-200" />
-          <PresenceAvatars users={activeUsers} currentUserId={user?.id} />
-        </div>
-
-        <div className="flex items-center gap-3">
-          <PersonaSwitcher />
         </div>
       </div>
 
@@ -688,27 +685,49 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
           </button>
         </div>
 
-        {/* View mode toggle (if PDF) */}
-        {activeTab === 'workspace' && contract.originalFile?.fileName.endsWith('.pdf') && (
-          <div className="flex items-center gap-1 rounded-lg border border-ink-200 bg-white p-1 text-xs">
-            <button
-              type="button"
-              onClick={() => setViewMode('pdf')}
-              className={`rounded px-2.5 py-1 font-semibold transition ${
-                viewMode === 'pdf' ? 'bg-ink-900 text-white' : 'text-ink-600 hover:text-ink-900'
-              }`}
-            >
-              PDF Viewer
-            </button>
+        {/* View mode toggle: Standard Editor vs Microsoft Word vs PDF */}
+        {activeTab === 'workspace' && (
+          <div className="flex items-center gap-1 rounded-xl border border-ink-200 bg-white p-1 text-xs shadow-xs">
             <button
               type="button"
               onClick={() => setViewMode('editor')}
-              className={`rounded px-2.5 py-1 font-semibold transition ${
-                viewMode === 'editor' ? 'bg-ink-900 text-white' : 'text-ink-600 hover:text-ink-900'
+              className={`rounded-lg px-2.5 py-1 font-semibold transition ${
+                viewMode === 'editor'
+                  ? 'bg-ink-900 text-white'
+                  : 'text-ink-600 hover:text-ink-900'
               }`}
             >
-              Clause Editor
+              Standard Editor
             </button>
+
+            <button
+              type="button"
+              onClick={() => setViewMode('word')}
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-semibold transition ${
+                viewMode === 'word'
+                  ? 'bg-[#185ABD] text-white shadow-xs'
+                  : 'text-ink-600 hover:text-[#185ABD]'
+              }`}
+            >
+              <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-[#103F91] text-[8px] font-black text-white">
+                W
+              </span>
+              <span>Microsoft Word</span>
+            </button>
+
+            {contract.originalFile?.fileName.endsWith('.pdf') && (
+              <button
+                type="button"
+                onClick={() => setViewMode('pdf')}
+                className={`rounded-lg px-2.5 py-1 font-semibold transition ${
+                  viewMode === 'pdf'
+                    ? 'bg-ink-900 text-white'
+                    : 'text-ink-600 hover:text-ink-900'
+                }`}
+              >
+                PDF Viewer
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -721,13 +740,21 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
               contractName={contract.name}
               counterparty={contract.counterparty || 'External Party'}
               file={contract.originalFile}
-              onDownload={() =>
-                downloadFile(
-                  `/api/v1/contracts/${contract.id}/file`,
-                  contract.originalFile?.fileName || `${contract.name}.pdf`,
-                )
-              }
               onSwitchToEditor={() => setViewMode('editor')}
+            />
+          ) : viewMode === 'word' ? (
+            <OfficeWordEditor
+              initialContent={editorContent}
+              contractName={contract.name}
+              counterparty={contract.counterparty || 'Counterparty'}
+              contractType={contract.type}
+              status={contract.status}
+              effectiveDate={contract.startDate}
+              expirationDate={contract.endDate}
+              onContentChange={handleContentChange}
+              onTriggerSaveVersion={() => setIsSaveModalOpen(true)}
+              autosaveStatus={autosaveStatus}
+              lastSavedAt={lastSavedAt}
             />
           ) : (
             <DocumentEditorCanvas
@@ -736,31 +763,6 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
               onTriggerSaveVersion={() => setIsSaveModalOpen(true)}
               autosaveStatus={autosaveStatus}
               lastSavedAt={lastSavedAt}
-              readOnly={!collabCanEdit}
-              quotedPassages={(commentsData?.comments ?? []).map((comment) => ({
-                id: comment.id,
-                quoteText: comment.quoteText ?? '',
-                isResolved: comment.isResolved,
-              }))}
-              activeQuoteId={activeQuoteId}
-              activeUsers={activeUsers}
-              currentUserId={user?.id}
-              onBroadcastCursor={sendCursor}
-              onBroadcastSelection={sendSelection}
-              notifications={notifications}
-              onDismissNotification={dismissNotification}
-              onCreateSelectionComment={async ({ quoteText, content }) => {
-                await api(`/api/v1/contracts/${contract.id}/comments`, {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    content,
-                    quoteText,
-                    versionNumber: currentVersionNumber,
-                  }),
-                });
-                await queryClient.invalidateQueries({ queryKey: ['contract-comments', contractId] });
-                await queryClient.invalidateQueries({ queryKey: ['notifications'] });
-              }}
             />
           )}
         </div>
@@ -925,18 +927,15 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
                   </div>
 
                   <div className="mt-4 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void downloadFile(
-                          `/api/v1/contracts/${contract.id}/file`,
-                          contract.originalFile!.fileName,
-                        )
-                      }
+                    <a
+                      href={`data:application/octet-stream;charset=utf-8,${encodeURIComponent(
+                        `Contract: ${contract.name}\nType: ${contract.type}\nStatus: ${contract.status}\nCounterparty: ${contract.counterparty}`,
+                      )}`}
+                      download={contract.originalFile.fileName}
                       className="flex-1 rounded-xl bg-accent px-3 py-2 text-center text-xs font-semibold text-white transition hover:opacity-90"
                     >
                       Download File
-                    </button>
+                    </a>
                   </div>
                 </div>
               ) : (
@@ -955,12 +954,6 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
           <ContractCommentsPanel
             contractId={contract.id}
             currentVersionNumber={currentVersionNumber}
-            activeCommentId={activeQuoteId}
-            onOpenQuote={(commentId) => {
-              setActiveQuoteId(commentId);
-              setActiveTab('workspace');
-              setViewMode('editor');
-            }}
           />
         </div>
       )}
@@ -1003,18 +996,3 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
     </div>
   );
 }
-
-export function ContractDetailPage() {
-  const { contractId } = useParams<{ contractId: string }>();
-
-  if (!contractId) {
-    return null;
-  }
-
-  return (
-    <CollaborationProvider contractId={contractId}>
-      <ContractDetailContent contractId={contractId} />
-    </CollaborationProvider>
-  );
-}
-
