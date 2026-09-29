@@ -160,9 +160,8 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
   const activeCommentsCount = commentsData?.comments?.filter((c) => !c.isResolved).length ?? 0;
   const messagesCount = chatData?.messages?.length ?? 0;
 
-  const currentUserColor = useMemo(() => {
-    return getUserColor(user?.id || user?.name || user?.email);
-  }, [user?.id, user?.name, user?.email]);
+  const userIdentifier = user ? (user.id || user.name || user.email || '') : '';
+  const currentUserColor = getUserColor(userIdentifier);
 
   // Decide initial editor content: draft content > latest version content > fallback template
   useEffect(() => {
