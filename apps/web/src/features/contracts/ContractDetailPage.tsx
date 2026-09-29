@@ -737,18 +737,23 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
               autosaveStatus={autosaveStatus}
               lastSavedAt={lastSavedAt}
               readOnly={!collabCanEdit}
+              comments={commentsData?.comments ?? []}
               quotedPassages={(commentsData?.comments ?? []).map((comment) => ({
                 id: comment.id,
                 quoteText: comment.quoteText ?? '',
                 isResolved: comment.isResolved,
               }))}
               activeQuoteId={activeQuoteId}
+              onSelectQuoteId={setActiveQuoteId}
               activeUsers={activeUsers}
               currentUserId={user?.id}
+              currentUserName={user?.name || 'Administrator'}
+              currentUserColor="#0f766e"
               onBroadcastCursor={sendCursor}
               onBroadcastSelection={sendSelection}
               notifications={notifications}
               onDismissNotification={dismissNotification}
+              onOpenVersionHistory={() => setActiveTab('versions')}
               onCreateSelectionComment={async ({ quoteText, content }) => {
                 await api(`/api/v1/contracts/${contract.id}/comments`, {
                   method: 'POST',
@@ -760,6 +765,25 @@ function ContractDetailContent({ contractId }: { contractId: string }) {
                 });
                 await queryClient.invalidateQueries({ queryKey: ['contract-comments', contractId] });
                 await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+              }}
+              onReplyComment={async (commentId, content) => {
+                await api(`/api/v1/contracts/${contract.id}/comments/${commentId}/reply`, {
+                  method: 'POST',
+                  body: JSON.stringify({ content }),
+                });
+                await queryClient.invalidateQueries({ queryKey: ['contract-comments', contractId] });
+              }}
+              onResolveComment={async (commentId) => {
+                await api(`/api/v1/contracts/${contract.id}/comments/${commentId}/resolve`, {
+                  method: 'PATCH',
+                });
+                await queryClient.invalidateQueries({ queryKey: ['contract-comments', contractId] });
+              }}
+              onDeleteComment={async (commentId) => {
+                await api(`/api/v1/contracts/${contract.id}/comments/${commentId}`, {
+                  method: 'DELETE',
+                });
+                await queryClient.invalidateQueries({ queryKey: ['contract-comments', contractId] });
               }}
             />
           )}

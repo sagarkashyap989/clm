@@ -396,6 +396,9 @@ export type CollaboratorUser = {
 export type CursorPosition = {
   characterOffset?: number;
   paragraphIndex?: number;
+  unscaledX?: number;
+  unscaledY?: number;
+  caretHeight?: number;
   xRatio?: number;
   yRatio?: number;
 };
@@ -404,6 +407,24 @@ export type SelectionRange = {
   quoteText?: string;
   startOffset?: number;
   endOffset?: number;
+};
+
+export type TrackedChangeType = 'insert' | 'delete' | 'format';
+
+export type TrackedChange = {
+  id: string;
+  type: TrackedChangeType;
+  text: string;
+  originalText?: string;
+  formatDetail?: string;
+  author: {
+    id: string;
+    name: string;
+    email?: string;
+    color?: string;
+  };
+  timestamp: string;
+  status: 'pending' | 'accepted' | 'rejected';
 };
 
 export type CollaboratorPresence = {

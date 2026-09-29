@@ -64,5 +64,85 @@ body {
   background-color: rgb(226 232 240 / 0.8);
 }
 ::highlight(cml-comment-active) {
-  background-color: rgb(251 146 60 / 0.75);
+  background-color: rgb(251 146 60 / 0.85);
 }
+
+/* Track Changes Inline Styling */
+.cml-change-item {
+  position: relative;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.cml-change-insert {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #065f46;
+  text-decoration: underline;
+  text-decoration-color: #10b981;
+  text-decoration-thickness: 2px;
+}
+
+.cml-change-insert:hover,
+.cml-change-insert.cml-change-active {
+  background-color: rgba(16, 185, 129, 0.3);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.4);
+}
+
+.cml-change-delete {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #991b1b;
+  text-decoration: line-through;
+  text-decoration-color: #ef4444;
+  text-decoration-thickness: 2px;
+  opacity: 0.85;
+}
+
+.cml-change-delete:hover,
+.cml-change-delete.cml-change-active {
+  background-color: rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
+}
+
+.cml-change-format {
+  background-color: rgba(147, 51, 234, 0.12);
+  color: #581c87;
+  border-bottom: 2px dashed #9333ea;
+}
+
+.cml-change-format:hover,
+.cml-change-format.cml-change-active {
+  background-color: rgba(147, 51, 234, 0.25);
+  box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.4);
+}
+
+.cml-comment-inline {
+  background-color: rgba(254, 240, 138, 0.65);
+  border-bottom: 2px solid #eab308;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.cml-comment-inline:hover,
+.cml-comment-inline.cml-comment-active {
+  background-color: rgba(253, 186, 116, 0.85);
+  border-bottom-color: #f97316;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.35);
+}
+
+.cml-comment-inline.cml-comment-resolved {
+  background-color: rgba(241, 245, 249, 0.85);
+  border-bottom-color: #94a3b8;
+  color: #64748b;
+}
+
+@keyframes cml-pulse-focus {
+  0%, 100% { outline: 2px solid transparent; }
+  50% { outline: 3px solid #0f766e; }
+}
+
+.cml-focus-pulse {
+  animation: cml-pulse-focus 1.2s ease-in-out 2;
+}
+
